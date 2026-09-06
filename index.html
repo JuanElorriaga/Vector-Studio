@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vector Studio - Editor Vetorial & Exportador SVG</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div id="app" class="app-container">
+    <!-- Topbar: Menu, Document title, Zoom, Undo/Redo, Export -->
+    <header class="topbar">
+      <div class="topbar-left">
+        <div class="app-logo">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M4 4H10V10H4V4Z" stroke="#4F46E5" stroke-width="2" stroke-linejoin="round"/>
+            <path d="M14 14H20V20H14V14Z" stroke="#06B6D4" stroke-width="2" stroke-linejoin="round"/>
+            <path d="M10 7L14 17" stroke="#A855F7" stroke-width="2" stroke-linecap="round"/>
+            <circle cx="17" cy="7" r="3" stroke="#EC4899" stroke-width="2"/>
+          </svg>
+          <span class="logo-text">Vector<strong>Studio</strong></span>
+        </div>
+
+        <div class="doc-title-wrapper">
+          <input type="text" id="doc-title" value="desenho_vetorial" title="Nome do arquivo" />
+          <span class="doc-badge">SVG / CDR Ready</span>
+        </div>
+      </div>
+
+      <div class="topbar-center">
+        <!-- Undo / Redo -->
+        <div class="btn-group">
+          <button id="btn-undo" class="tool-btn-sm" title="Desfazer (Ctrl+Z)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
+          </button>
+          <button id="btn-redo" class="tool-btn-sm" title="Refazer (Ctrl+Y)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+          </button>
+        </div>
+
+        <div class="divider-vertical"></div>
+
+        <!-- Zoom Controls -->
+        <div class="zoom-controls">
+          <button id="btn-zoom-out" class="tool-btn-sm" title="Diminuir Zoom (-)">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+          </button>
+          <span id="zoom-value" class="zoom-text" title="Clique para redefinir para 100%">100%</span>
+          <button id="btn-zoom-in" class="tool-btn-sm" title="Aumentar Zoom (+)">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+          </button>
+          <button id="btn-zoom-fit" class="tool-btn-sm" title="Ajustar à Tela">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+          </button>
+        </div>
+
+        <div class="divider-vertical"></div>
+
+        <!-- Document Dimensions (Tamanho do Documento em px) -->
+        <div class="doc-dimensions-control" title="Tamanho do Documento (Largura × Altura em px)">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+          <input type="number" id="top-doc-w" value="1200" min="50" max="10000" step="10" title="Largura do Documento em px" />
+          <span class="dim-separator">×</span>
+          <input type="number" id="top-doc-h" value="800" min="50" max="10000" step="10" title="Altura do Documento em px" />
+          <span class="dim-unit">px</span>
+          <select id="doc-preset-select" class="doc-preset-dropdown" title="Escolher Tamanho Predefinido">
+            <option value="" disabled selected>Predefinições</option>
+            <option value="1200x800">1200 × 800 (Padrão)</option>
+            <option value="1920x1080">1920 × 1080 (Full HD)</option>
+            <option value="1080x1080">1080 × 1080 (Quadrado/Insta)</option>
+            <option value="800x600">800 × 600 (Clássico)</option>
+            <option value="1240x1754">1240 × 1754 (A4 Retrato)</option>
+            <option value="1754x1240">1754 × 1240 (A4 Paisagem)</option>
+          </select>
+        </div>
+
+        <div class="divider-vertical"></div>
+
+        <!-- Grid & Snap Toggle -->
+        <div class="btn-group">
+          <button id="btn-toggle-grid" class="tool-btn-sm active" title="Alternar Grade">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="3" y1="15" x2="21" y2="15"></line><line x1="9" y1="3" x2="9" y2="21"></line><line x1="15" y1="3" x2="15" y2="21"></line></svg>
+          </button>
+          <button id="btn-toggle-snap" class="tool-btn-sm" title="Alinhar à Grade (Snap)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="topbar-right">
+        <button id="btn-clear-canvas" class="btn-secondary" title="Limpar todo o desenho">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+          Limpar
+        </button>
+
+        <label class="btn-secondary" title="Abrir arquivo SVG ou Projeto">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 22h14a2 2 0 0 0 2-2V7.5L14.5 2H6a2 2 0 0 0-2 2v4"/><polyline points="14 2 14 8 20 8"/><path d="M2 15h10"/><path d="M9 18l3-3-3-3"/></svg>
+          Abrir
+          <input type="file" id="file-input" accept=".svg,.json" style="display:none;" />
+        </label>
+
+        <!-- Save dropdown / buttons -->
+        <div class="export-dropdown-wrapper">
+          <button id="btn-export-svg" class="btn-primary" title="Salvar arquivo vetorial SVG (compatível com CorelDraw)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <span>Salvar SVG</span>
+          </button>
+          <button id="btn-export-more" class="btn-primary btn-arrow" title="Mais opções de salvamento">▼</button>
+          <div id="export-menu" class="dropdown-menu">
+            <button id="btn-export-svg-direct">Salvar Vetor SVG (.svg) <span class="tag-corel">CorelDraw/Illustrator</span></button>
+            <button id="btn-export-png">Exportar Imagem HD (.png)</button>
+            <button id="btn-save-project">Salvar Projeto (.json)</button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Workspace -->
+    <div class="workspace">
+      <!-- Left Toolbar: Tools selection realigned from top to bottom -->
+      <aside class="left-toolbar" role="toolbar" aria-label="Ferramentas de Desenho">
+        <!-- 1. Seleção -->
+        <button id="tool-select" class="tool-btn active" data-tool="select" title="Ferramenta Seleção (V)">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3l7 18 3-7 7-3L3 3z"/></svg>
+          <span class="tool-tip">Ferramenta Seleção (V)</span>
+        </button>
+
+        <div class="tool-separator"></div>
+
+        <!-- 2. Formas Básicas -->
+        <button id="tool-rect" class="tool-btn" data-tool="rect" title="Quadro / Retângulo (R)">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="1"/></svg>
+          <span class="tool-tip">Quadro / Retângulo (R)</span>
+        </button>
+
+        <button id="tool-circle" class="tool-btn" data-tool="circle" title="Círculo / Elipse (C)">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/></svg>
+          <span class="tool-tip">Círculo / Elipse (C)</span>
+        </button>
+
+        <button id="tool-polygon" class="tool-btn" data-tool="polygon" title="Polígono / Estrela (P)">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+          <span class="tool-tip">Polígono / Estrela (P)</span>
+        </button>
+
+        <div class="tool-separator"></div>
+
+        <!-- 3. Ferramentas de Linha, Bézier e Conectores -->
+        <button id="tool-bezier" class="tool-btn" data-tool="bezier" title="Ferramenta Bézier (B)">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 18C6 6 14 6 15 12c1 6 6 6 6-4" stroke-linecap="round"/>
+            <rect x="13" y="10" width="4" height="4" fill="currentColor"/>
+            <circle cx="8" cy="8" r="2" fill="#06b6d4"/>
+            <line x1="15" y1="12" x2="8" y2="8" stroke="#06b6d4" stroke-width="1.5" stroke-dasharray="2 2"/>
+          </svg>
+          <span class="tool-tip">Ferramenta Bézier (B)</span>
+        </button>
+
+        <button id="tool-line" class="tool-btn" data-tool="line" title="Conector de Linha Reta (L)">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="20" x2="20" y2="4"/><circle cx="4" cy="20" r="2" fill="currentColor"/><circle cx="20" cy="4" r="2" fill="currentColor"/></svg>
+          <span class="tool-tip">Conector Linha Reta (L)</span>
+        </button>
+
+        <button id="tool-connector-round" class="tool-btn" data-tool="connector-round" title="Conector Redondo de Ângulo Reto (X)">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M4 20h7a5 5 0 0 0 5-5V4" stroke-linecap="round"/>
+            <circle cx="4" cy="20" r="2" fill="currentColor"/>
+            <circle cx="16" cy="4" r="2" fill="currentColor"/>
+            <circle cx="14" cy="14" r="1.5" fill="#f59e0b"/>
+          </svg>
+          <span class="tool-tip">Conector Redondo Ângulo Reto (X)</span>
+        </button>
+
+        <div class="tool-separator"></div>
+
+        <!-- 4. Navegação -->
+        <button id="tool-pan" class="tool-btn" data-tool="pan" title="Mover Tela / Pan (Espaço)">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0m-4-1a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v6m-4-2a2 2 0 0 0-2 2v3a9 9 0 0 0 9 9h2a9 9 0 0 0 9-9v-5a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v3"/></svg>
+          <span class="tool-tip">Arrastar Tela (H)</span>
+        </button>
+      </aside>
+
+      <!-- Center: SVG Canvas Viewport -->
+      <main class="canvas-viewport" id="canvas-viewport">
+        <!-- SVG Canvas Wrapper (transformed during zoom & pan) -->
+        <div class="canvas-wrapper" id="canvas-wrapper">
+          <!-- Main Drawing SVG element -->
+          <svg id="drawing-svg" class="drawing-svg" width="1200" height="800" viewBox="0 0 1200 800" xmlns="http://www.w3.org/2000/svg">
+            <defs id="svg-defs">
+              <!-- Grid pattern for background -->
+              <pattern id="grid-pattern-small" width="20" height="20" patternUnits="userSpaceOnUse">
+                <path d="M 20 0 L 0 0 0 20" fill="none" stroke="rgba(255, 255, 255, 0.05)" stroke-width="1"/>
+              </pattern>
+              <pattern id="grid-pattern-large" width="100" height="100" patternUnits="userSpaceOnUse">
+                <rect width="100" height="100" fill="url(#grid-pattern-small)"/>
+                <path d="M 100 0 L 0 0 0 100" fill="none" stroke="rgba(255, 255, 255, 0.12)" stroke-width="1.5"/>
+              </pattern>
+            </defs>
+
+            <!-- Background canvas sheet -->
+            <rect id="canvas-bg" width="100%" height="100%" fill="#1a1d24" />
+            <rect id="canvas-grid" width="100%" height="100%" fill="url(#grid-pattern-large)" pointer-events="none"/>
+
+            <!-- User Shapes Group -->
+            <g id="shapes-layer"></g>
+
+            <!-- Interactive Drawing Preview Layer -->
+            <g id="preview-layer" pointer-events="none"></g>
+
+            <!-- Interactive Selection Overlay (Bounding box, handles) -->
+            <g id="selection-layer" pointer-events="none"></g>
+          </svg>
+        </div>
+
+        <!-- Canvas Dimensions Info Floating Badge -->
+        <div class="canvas-info-badge">
+          <span id="canvas-status">1200 x 800 px</span>
+        </div>
+      </main>
+
+      <!-- Right: Inspector / Properties Panel -->
+      <aside class="right-inspector" id="inspector-panel">
+        <div class="panel-header">
+          <h3>Propriedades</h3>
+          <span id="selected-type-badge" class="element-badge">Nenhum objeto</span>
+        </div>
+
+        <div class="panel-content" id="panel-content">
+          <!-- Empty State: Document Properties -->
+          <div id="inspector-empty" class="inspector-empty">
+            <div class="doc-settings-box">
+              <div class="doc-settings-title">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+                Tamanho do Documento
+              </div>
+
+              <div class="doc-settings-inputs">
+                <div class="doc-settings-field">
+                  <label for="side-doc-w">Largura (px):</label>
+                  <input type="number" id="side-doc-w" value="1200" min="50" max="10000" step="10" />
+                </div>
+                <div class="doc-settings-field">
+                  <label for="side-doc-h">Altura (px):</label>
+                  <input type="number" id="side-doc-h" value="800" min="50" max="10000" step="10" />
+                </div>
+              </div>
+
+              <label style="font-size: 11px; color: var(--text-muted); display:block; margin-bottom:6px; font-weight: 500;">Predefinições Rápidas:</label>
+              <div class="doc-settings-presets-grid">
+                <button type="button" class="doc-preset-btn" data-preset="1920x1080">Full HD (1920×1080)</button>
+                <button type="button" class="doc-preset-btn" data-preset="1080x1080">Quadrado (1080×1080)</button>
+                <button type="button" class="doc-preset-btn" data-preset="1200x800">Padrão (1200×800)</button>
+                <button type="button" class="doc-preset-btn" data-preset="1240x1754">A4 (1240×1754)</button>
+              </div>
+
+              <button type="button" id="btn-doc-fit" class="btn-secondary" style="width: 100%; justify-content: center; font-size: 12px; margin-top: 4px;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+                Ajustar Zoom ao Documento
+              </button>
+            </div>
+
+            <div class="shortcuts-hint" style="margin-top: 14px;">
+              <small><b>Atalhos rápidos:</b></small>
+              <small><kbd>V</kbd> Selecionar | <kbd>R</kbd> Retângulo</small>
+              <small><kbd>C</kbd> Círculo | <kbd>L</kbd> Linha 2 Pontos</small>
+              <small><kbd>B</kbd> Bézier | <kbd>Del</kbd> Excluir</small>
+            </div>
+          </div>
+
+          <!-- Active Properties (hidden when nothing selected) -->
+          <div id="inspector-active" class="inspector-active" style="display: none;">
+            
+            <!-- SPECIAL ACTIONS: Converter Quadro em Círculo & Remover Pontas -->
+            <section class="prop-section special-actions-section">
+              <div class="section-title">Ações Especiais de Forma</div>
+
+              <!-- Converter Quadro em Círculo / Círculo em Quadro -->
+              <div class="form-row action-row" id="row-convert-shape">
+                <button id="btn-convert-shape" class="btn-action-highlight" title="Converter Retângulo em Círculo/Elipse mantendo cores e proporções">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h8v8H4z"/><path d="M16 12a4 4 0 1 0 0 8 4 4 0 0 0 0-8z"/><path d="M8 12v4a4 4 0 0 0 4 4h4" stroke-dasharray="2 2"/></svg>
+                  <span id="btn-convert-text">Converter Quadro em Círculo</span>
+                </button>
+              </div>
+
+              <!-- Curvar Linha / Reta -->
+              <div class="form-row action-row" id="row-curve-line" style="display:none;">
+                <button id="btn-toggle-curve" class="btn-action-highlight" title="Alternar entre Linha Reta e Curva Bézier">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M3 19C7 7 17 7 21 19" stroke-linecap="round"/>
+                    <circle cx="3" cy="19" r="2" fill="currentColor"/>
+                    <circle cx="21" cy="19" r="2" fill="currentColor"/>
+                    <circle cx="12" cy="10" r="2" fill="#06b6d4"/>
+                  </svg>
+                  <span id="btn-curve-text">Curvar Reta</span>
+                </button>
+              </div>
+
+              <!-- Curvature Slider -->
+              <div class="form-row curve-amount-row" id="row-curve-amount" style="display:none;">
+                <div class="prop-header-with-value">
+                  <label for="curve-amount-slider" title="Ajustar intensidade da curvatura">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 17c4-8 14-8 18 0"/></svg>
+                    Curvatura da Linha:
+                  </label>
+                  <span id="curve-amount-val">0px</span>
+                </div>
+                <div class="slider-with-quick-buttons">
+                  <input type="range" id="curve-amount-slider" min="-180" max="180" value="0" step="1" />
+                  <div class="quick-corner-btns">
+                    <button type="button" class="btn-micro" id="btn-curve-straight" title="Alinhar em Reta">Reta (0)</button>
+                    <button type="button" class="btn-micro" id="btn-curve-arch" title="Arco para Cima">Arco (+40)</button>
+                    <button type="button" class="btn-micro" id="btn-curve-inv" title="Arco para Baixo">Invertido (-40)</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Conector Redondo de Ângulo Reto Controls -->
+              <div class="form-row connector-round-row" id="row-connector-round" style="display:none;">
+                <div class="prop-header-with-value">
+                  <label for="connector-round-slider" title="Ajustar raio do canto do cotovelo">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20h7a5 5 0 0 0 5-5V4"/></svg>
+                    Raio do Ângulo Reto:
+                  </label>
+                  <span id="connector-round-val">20px</span>
+                </div>
+                <div class="slider-with-quick-buttons">
+                  <input type="range" id="connector-round-slider" min="0" max="80" value="20" step="1" />
+                  <div class="quick-corner-btns">
+                    <button type="button" class="btn-micro" id="btn-elbow-0" title="Canto Reto Vivo (90°)">0 (Reto)</button>
+                    <button type="button" class="btn-micro" id="btn-elbow-16" title="Raio 16px">16px</button>
+                    <button type="button" class="btn-micro" id="btn-elbow-32" title="Raio 32px">32px</button>
+                  </div>
+                </div>
+                <button type="button" id="btn-toggle-elbow-dir" class="btn-micro" style="margin-top: 6px; width: 100%;" title="Alternar trajeto do conector">
+                  Inverter Dobra (Horiz / Vert)
+                </button>
+              </div>
+
+              <!-- Bézier Path Controls -->
+              <div class="form-row bezier-actions-row" id="row-bezier" style="display:none;">
+                <button id="btn-toggle-bezier-closed" class="btn-action-highlight" title="Ligar os pontos para criar uma forma geométrica fechada com preenchimento">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 12 12 22 22 12"/></svg>
+                  <span id="btn-bezier-closed-text">Ligar Pontos (Criar Forma Geométrica)</span>
+                </button>
+
+                <!-- Manipulação e Curvatura de Nós (Estilo CorelDRAW F10) -->
+                <div class="bezier-node-panel" id="bezier-node-panel" style="margin-top: 10px; padding: 10px; background: rgba(255,255,255,0.03); border-radius: 8px; border: 1px solid rgba(255,255,255,0.07);">
+                  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom: 8px;">
+                    <span style="font-size: 11px; font-weight: 600; color: var(--text-color); display: flex; align-items: center; gap: 4px;">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg>
+                      <span id="bezier-selected-node-label">Nó #1 Selecionado</span>
+                    </span>
+                    <span id="bezier-node-status" style="font-size: 10px; color: #38bdf8; background: rgba(56, 189, 248, 0.15); padding: 2px 6px; border-radius: 4px;">Ativo</span>
+                  </div>
+
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 6px;">
+                    <button type="button" id="btn-bezier-curve-node" class="btn-micro" style="padding: 6px; font-weight: 600; display:flex; align-items:center; justify-content:center; gap:4px; background: rgba(99, 102, 241, 0.2); border-color: rgba(99, 102, 241, 0.5); color: #a5b4fc;" title="Curvar / entornar a linha deste ponto adicionando alças de controle">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 19C7 7 17 7 21 19"/></svg>
+                      Curvar Linha
+                    </button>
+                    <button type="button" id="btn-bezier-straighten-node" class="btn-micro" style="padding: 6px; font-weight: 500; display:flex; align-items:center; justify-content:center; gap:4px;" title="Tornar linha reta (remover curvatura)">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="20" x2="20" y2="4"/></svg>
+                      Tornar Reta
+                    </button>
+                  </div>
+
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 8px;">
+                    <button type="button" id="btn-bezier-smooth-node" class="btn-micro" style="padding: 6px; font-size: 11px; text-align: center; justify-content: center;" title="Alternar entre Nó Suave (alças alinhadas) e Cúspide (alças independentes)">
+                      Suavizar / Cúspide
+                    </button>
+                    <button type="button" id="btn-bezier-delete-node" class="btn-micro" style="padding: 6px; font-size: 11px; text-align: center; justify-content: center; color: #f87171; border-color: rgba(248, 113, 113, 0.3);" title="Excluir o ponto selecionado">
+                      Excluir Nó
+                    </button>
+                  </div>
+
+                  <div style="font-size: 11px; line-height: 1.4; color: var(--text-muted); background: rgba(6, 182, 212, 0.08); border-left: 2px solid #06b6d4; padding: 6px 8px; border-radius: 0 4px 4px 0;">
+                    💡 <b>Entornar Linhas:</b> Clique em qualquer nó para arrastar suas alças ciano, ou <b>arraste diretamente qualquer linha da forma</b> para entorná-la e curvá-la na hora!
+                  </div>
+                </div>
+              </div>
+
+              <!-- Remover Pontas / Arredondamento de Cantos -->
+              <div class="form-row corner-rounding-row" id="row-corners">
+                <div class="prop-header-with-value">
+                  <label for="corner-radius-slider" title="Suavizar e arredondar cantos vivos">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 20V9a6 6 0 0 1 6-6h11"/></svg>
+                    Remover Pontas / Cantos:
+                  </label>
+                  <span id="corner-radius-val">0px</span>
+                </div>
+                <div class="slider-with-quick-buttons">
+                  <input type="range" id="corner-radius-slider" min="0" max="150" value="0" step="1" />
+                  <div class="quick-corner-btns">
+                    <button type="button" class="btn-micro" id="btn-corner-0" title="Cantos Vivos">0</button>
+                    <button type="button" class="btn-micro" id="btn-corner-12" title="Arredondado Médio">12</button>
+                    <button type="button" class="btn-micro" id="btn-corner-max" title="Totalmente Redondo">Máx</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Polygon Points / Remover Pontas de Estrela/Polígono -->
+              <div class="form-row polygon-points-row" id="row-poly-points" style="display:none;">
+                <div class="prop-header-with-value">
+                  <label for="poly-points-slider">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15 8 22 9 17 14 18 21 12 17 6 21 7 14 2 9 9 8 12 2"/></svg>
+                    Qtd. de Pontas / Vértices:
+                  </label>
+                  <span id="poly-points-val">5</span>
+                </div>
+                <div class="slider-with-quick-buttons">
+                  <input type="range" id="poly-points-slider" min="3" max="16" value="5" step="1" />
+                  <div class="quick-corner-btns">
+                    <button type="button" class="btn-micro" id="btn-poly-dec" title="Remover ponta">-1</button>
+                    <button type="button" class="btn-micro" id="btn-poly-inc" title="Adicionar ponta">+1</button>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <!-- Transform: Position & Size -->
+            <section class="prop-section">
+              <div class="section-title">Dimensões & Posição</div>
+              <div class="grid-2x2">
+                <div class="input-field">
+                  <span class="field-label">X</span>
+                  <input type="number" id="prop-x" step="1" />
+                </div>
+                <div class="input-field">
+                  <span class="field-label">Y</span>
+                  <input type="number" id="prop-y" step="1" />
+                </div>
+                <div class="input-field">
+                  <span class="field-label">L (Largura)</span>
+                  <input type="number" id="prop-w" min="1" step="1" />
+                </div>
+                <div class="input-field">
+                  <span class="field-label">A (Altura)</span>
+                  <input type="number" id="prop-h" min="1" step="1" />
+                </div>
+              </div>
+              <div class="form-row rotate-row">
+                <div class="input-field full-width">
+                  <span class="field-label">Rotação (°)</span>
+                  <input type="range" id="prop-rotation" min="0" max="360" value="0" />
+                  <span id="prop-rotation-val">0°</span>
+                </div>
+              </div>
+            </section>
+
+            <!-- Preenchimento (Fill) & Gradientes -->
+            <section class="prop-section">
+              <div class="section-title-with-extra">
+                <span>Preenchimento</span>
+                <!-- Fill Mode Selector: None, Solid, Gradient -->
+                <div class="mode-pills">
+                  <button type="button" class="pill-btn active" id="fill-mode-solid" data-fill="solid">Sólido</button>
+                  <button type="button" class="pill-btn" id="fill-mode-gradient" data-fill="gradient">Gradiente</button>
+                  <button type="button" class="pill-btn" id="fill-mode-none" data-fill="none">Sem</button>
+                </div>
+              </div>
+
+              <!-- Solid Fill Controls -->
+              <div id="fill-solid-controls" class="fill-controls-box">
+                <div class="color-picker-row">
+                  <input type="color" id="prop-fill-color" class="color-input-bubble" value="#3b82f6" />
+                  <input type="text" id="prop-fill-color-hex" class="hex-text-input" value="#3b82f6" />
+                  <div class="opacity-box">
+                    <span class="micro-label">Opacidade</span>
+                    <input type="number" id="prop-fill-opacity" min="0" max="100" value="100" />
+                    <span>%</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Gradient Controls -->
+              <div id="fill-gradient-controls" class="fill-controls-box" style="display: none;">
+                <div class="gradient-type-row">
+                  <label class="radio-label">
+                    <input type="radio" name="gradient-type" value="linear" checked />
+                    Linear
+                  </label>
+                  <label class="radio-label">
+                    <input type="radio" name="gradient-type" value="radial" />
+                    Radial
+                  </label>
+                </div>
+
+                <!-- Gradient Preview Bar with Color Stops -->
+                <div class="gradient-bar-container">
+                  <div id="gradient-preview-bar" class="gradient-preview-bar"></div>
+                </div>
+
+                <div class="gradient-stops-row">
+                  <div class="stop-control">
+                    <span class="micro-label">Cor Inicial</span>
+                    <div class="picker-wrap">
+                      <input type="color" id="grad-stop1-color" value="#4f46e5" />
+                      <span id="grad-stop1-hex">#4f46e5</span>
+                    </div>
+                  </div>
+                  <div class="stop-control">
+                    <span class="micro-label">Cor Final</span>
+                    <div class="picker-wrap">
+                      <input type="color" id="grad-stop2-color" value="#06b6d4" />
+                      <span id="grad-stop2-hex">#06b6d4</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="form-row" id="grad-angle-wrapper">
+                  <div class="prop-header-with-value">
+                    <span class="micro-label">Ângulo do Gradiente</span>
+                    <span id="grad-angle-val">90°</span>
+                  </div>
+                  <input type="range" id="grad-angle-slider" min="0" max="360" value="90" />
+                </div>
+              </div>
+            </section>
+
+            <!-- Contorno (Stroke) -->
+            <section class="prop-section">
+              <div class="section-title-with-extra">
+                <span>Contorno (Traço)</span>
+                <button type="button" class="btn-link" id="btn-toggle-stroke">Sem Traço</button>
+              </div>
+
+              <div class="color-picker-row">
+                <input type="color" id="prop-stroke-color" class="color-input-bubble" value="#ffffff" />
+                <input type="text" id="prop-stroke-color-hex" class="hex-text-input" value="#ffffff" />
+                <div class="stroke-width-box">
+                  <span class="micro-label">Largura</span>
+                  <input type="number" id="prop-stroke-width" min="0" max="64" value="2" />
+                  <span>px</span>
+                </div>
+              </div>
+
+              <div class="stroke-styles-row">
+                <label class="select-wrapper">
+                  <span class="micro-label">Estilo:</span>
+                  <select id="prop-stroke-dash">
+                    <option value="solid">Sólido</option>
+                    <option value="dashed">Tracejado</option>
+                    <option value="dotted">Pontilhado</option>
+                  </select>
+                </label>
+                <label class="select-wrapper">
+                  <span class="micro-label">Pontas:</span>
+                  <select id="prop-stroke-cap">
+                    <option value="round">Arredondadas</option>
+                    <option value="square">Retas</option>
+                  </select>
+                </label>
+              </div>
+            </section>
+
+            <!-- Ordem de Camadas e Organização -->
+            <section class="prop-section">
+              <div class="section-title">Organização</div>
+              <div class="action-grid-buttons">
+                <button id="btn-bring-front" class="btn-action-tool" title="Trazer para a Frente">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 8h12v12H8z"/><path d="M4 16V4h12" stroke-dasharray="2 2"/></svg>
+                  Para Frente
+                </button>
+                <button id="btn-send-back" class="btn-action-tool" title="Enviar para Trás">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h12v12H4z"/><path d="M8 20h12V8" stroke-dasharray="2 2"/></svg>
+                  Para Trás
+                </button>
+                <button id="btn-duplicate" class="btn-action-tool" title="Duplicar Objeto (Ctrl+D)">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                  Duplicar
+                </button>
+                <button id="btn-delete" class="btn-action-tool danger" title="Excluir Objeto (Delete)">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                  Excluir
+                </button>
+              </div>
+            </section>
+          </div>
+        </div>
+      </aside>
+    </div>
+
+    <!-- Bottom Dock: Quadro de Cores (Color Swatches Palette) -->
+    <footer class="bottom-palette-bar">
+      <div class="palette-target-toggle">
+        <span class="palette-label">Aplicar Cor em:</span>
+        <button id="btn-target-fill" class="target-btn active" title="Aplicar na cor de preenchimento">Preenchimento</button>
+        <button id="btn-target-stroke" class="target-btn" title="Aplicar na cor do contorno">Contorno</button>
+      </div>
+
+      <div class="swatches-scroller">
+        <!-- Transparent / None swatch -->
+        <button class="swatch-item swatch-none" data-color="none" title="Sem cor"></button>
+        <!-- Gradients shortcuts -->
+        <button class="swatch-item swatch-grad" data-gradient="linear-45-#4f46e5-#06b6d4" style="background: linear-gradient(135deg, #4f46e5, #06b6d4);" title="Gradiente Índigo / Ciano"></button>
+        <button class="swatch-item swatch-grad" data-gradient="linear-45-#ec4899-#f59e0b" style="background: linear-gradient(135deg, #ec4899, #f59e0b);" title="Gradiente Rosa / Âmbar"></button>
+        <button class="swatch-item swatch-grad" data-gradient="linear-45-#10b981-#3b82f6" style="background: linear-gradient(135deg, #10b981, #3b82f6);" title="Gradiente Esmeralda / Azul"></button>
+        <button class="swatch-item swatch-grad" data-gradient="linear-45-#8b5cf6-#ec4899" style="background: linear-gradient(135deg, #8b5cf6, #ec4899);" title="Gradiente Roxo / Magenta"></button>
+        
+        <div class="swatch-divider"></div>
+
+        <!-- Solid Colors (Corel & Modern Palette) -->
+        <button class="swatch-item" style="background: #ffffff;" data-color="#ffffff" title="Branco"></button>
+        <button class="swatch-item" style="background: #e2e8f0;" data-color="#e2e8f0" title="Cinza Claro"></button>
+        <button class="swatch-item" style="background: #94a3b8;" data-color="#94a3b8" title="Cinza Médio"></button>
+        <button class="swatch-item" style="background: #475569;" data-color="#475569" title="Ardósia"></button>
+        <button class="swatch-item" style="background: #1e293b;" data-color="#1e293b" title="Cinza Escuro"></button>
+        <button class="swatch-item" style="background: #000000;" data-color="#000000" title="Preto"></button>
+
+        <div class="swatch-divider"></div>
+
+        <button class="swatch-item" style="background: #ef4444;" data-color="#ef4444" title="Vermelho"></button>
+        <button class="swatch-item" style="background: #f97316;" data-color="#f97316" title="Laranja"></button>
+        <button class="swatch-item" style="background: #f59e0b;" data-color="#f59e0b" title="Âmbar"></button>
+        <button class="swatch-item" style="background: #eab308;" data-color="#eab308" title="Amarelo"></button>
+        <button class="swatch-item" style="background: #84cc16;" data-color="#84cc16" title="Lima"></button>
+        <button class="swatch-item" style="background: #10b981;" data-color="#10b981" title="Verde"></button>
+        <button class="swatch-item" style="background: #06b6d4;" data-color="#06b6d4" title="Ciano"></button>
+        <button class="swatch-item" style="background: #3b82f6;" data-color="#3b82f6" title="Azul"></button>
+        <button class="swatch-item" style="background: #6366f1;" data-color="#6366f1" title="Índigo"></button>
+        <button class="swatch-item" style="background: #8b5cf6;" data-color="#8b5cf6" title="Violeta"></button>
+        <button class="swatch-item" style="background: #d946ef;" data-color="#d946ef" title="Fúcsia"></button>
+        <button class="swatch-item" style="background: #ec4899;" data-color="#ec4899" title="Rosa"></button>
+      </div>
+
+      <div class="palette-quick-picker">
+        <label class="custom-color-btn" title="Escolher cor personalizada">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m4.93 4.93 4.24 4.24"/><path d="m14.83 9.17 4.24-4.24"/><path d="m14.83 14.83 4.24 4.24"/><path d="m9.17 14.83-4.24 4.24"/></svg>
+          <input type="color" id="quick-custom-color" style="display:none;" />
+        </label>
+      </div>
+    </footer>
+  </div>
+
+  <!-- Notification Toast -->
+  <div id="toast" class="toast">Mensagem</div>
+
+  <script src="app.js"></script>
+</body>
+</html>
