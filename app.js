@@ -30,6 +30,7 @@
     docWidth: 1200,
     docHeight: 800,
     elements: new Map(), // id -> element data object
+    lockAspectRatio: true,
     // Mobile Touch & Multi-Touch Gestures
     touchStartDist: 0,
     touchStartZoom: 1,
@@ -123,6 +124,18 @@
     propH: document.getElementById('prop-h'),
     propRotation: document.getElementById('prop-rotation'),
     propRotationVal: document.getElementById('prop-rotation-val'),
+
+    // Flip and Scale
+    btnFlipH: document.getElementById('btn-flip-h'),
+    btnFlipV: document.getElementById('btn-flip-v'),
+    btnLockAspect: document.getElementById('btn-lock-aspect'),
+    aspectLockText: document.getElementById('aspect-lock-text'),
+    btnScaleHalf: document.getElementById('btn-scale-half'),
+    btnScaleMinus: document.getElementById('btn-scale-minus'),
+    btnScalePlus: document.getElementById('btn-scale-plus'),
+    btnScaleDouble: document.getElementById('btn-scale-double'),
+    propScaleInput: document.getElementById('prop-scale-input'),
+    btnScaleApply: document.getElementById('btn-scale-apply'),
 
     // Fill
     fillModeSolid: document.getElementById('fill-mode-solid'),
@@ -388,6 +401,8 @@
       width: 0,
       height: 0,
       rotation: 0,
+      flipH: false,
+      flipV: false,
       fillType: 'solid',
       fillColor: defaultColor,
       fillOpacity: 1,
@@ -782,10 +797,20 @@
       } catch (_) {}
     }
 
+    const cx = data.x + data.width / 2;
+    const cy = data.y + data.height / 2;
+    let transformParts = [];
     if (data.rotation) {
-      const cx = data.x + data.width / 2;
-      const cy = data.y + data.height / 2;
-      el.setAttribute('transform', `rotate(${data.rotation} ${cx} ${cy})`);
+      transformParts.push(`rotate(${data.rotation} ${cx} ${cy})`);
+    }
+    if (data.flipH || data.flipV) {
+      const sx = data.flipH ? -1 : 1;
+      const sy = data.flipV ? -1 : 1;
+      transformParts.push(`translate(${cx}, ${cy}) scale(${sx}, ${sy}) translate(${-cx}, ${-cy})`);
+    }
+
+    if (transformParts.length > 0) {
+      el.setAttribute('transform', transformParts.join(' '));
     } else {
       el.removeAttribute('transform');
     }
@@ -1080,8 +1105,17 @@
     const cx = item.x + item.width / 2;
     const cy = item.y + item.height / 2;
 
+    let transformParts = [];
     if (item.rotation) {
-      g.setAttribute('transform', `rotate(${item.rotation} ${cx} ${cy})`);
+      transformParts.push(`rotate(${item.rotation} ${cx} ${cy})`);
+    }
+    if (item.flipH || item.flipV) {
+      const sx = item.flipH ? -1 : 1;
+      const sy = item.flipV ? -1 : 1;
+      transformParts.push(`translate(${cx}, ${cy}) scale(${sx}, ${sy}) translate(${-cx}, ${-cy})`);
+    }
+    if (transformParts.length > 0) {
+      g.setAttribute('transform', transformParts.join(' '));
     }
 
     const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
@@ -2259,6 +2293,18 @@
     dom.propRotation.value = item.rotation || 0;
     dom.propRotationVal.textContent = `${item.rotation || 0}°`;
 
+    // Invert / Flip Button States
+    if (dom.btnFlipH) dom.btnFlipH.classList.toggle('active', !!item.flipH);
+    if (dom.btnFlipV) dom.btnFlipV.classList.toggle('active', !!item.flipV);
+
+    // Aspect Ratio Lock
+    if (dom.btnLockAspect) {
+      dom.btnLockAspect.classList.toggle('active', !!state.lockAspectRatio);
+      if (dom.aspectLockText) {
+        dom.aspectLockText.textContent = state.lockAspectRatio ? 'Proporcional' : 'Livre';
+      }
+    }
+
     // Fill settings
     const fillMode = item.fillType || 'solid';
     dom.fillModeSolid.classList.toggle('active', fillMode === 'solid');
@@ -2560,6 +2606,164 @@
     clearSelection();
     saveHistoryState();
     showToast('Objeto excluído');
+  }
+
+  // =========================================================================
+  // FLIP / INVERT OBJECTS (HORIZONTAL & VERTICAL)
+  // =========================================================================
+
+  function flipSelectedObject(direction) {
+    const item = getSelectedElement();
+    if (!item) {
+      showToast('Selecione um objeto para inverter!');
+      return;
+    }
+
+    if (direction === 'horizontal') {
+      if (item.type === 'line') {
+        const mx = (item.x1 + item.x2) / 2;
+        const tempX1 = item.x1;
+        item.x1 = item.x2;
+        item.x2 = tempX1;
+        item.curvature = -item.curvature;
+        recalcLineBoundsAndCurve(item);
+      } else if (item.type === 'connector-round') {
+        const tempX1 = item.x1;
+        item.x1 = item.x2;
+        item.x2 = tempX1;
+        item.elbowRatio = 1 - (item.elbowRatio || 0.5);
+      } else if (item.type === 'bezier') {
+        const cx = item.x + item.width / 2;
+        if (item.points) {
+          item.points.forEach(p => {
+            p.x = 2 * cx - p.x;
+            if (p.cp1) p.cp1.x = 2 * cx - p.cp1.x;
+            if (p.cp2) p.cp2.x = 2 * cx - p.cp2.x;
+          });
+        }
+        recalcBezierBounds(item);
+      } else {
+        item.flipH = !item.flipH;
+      }
+      showToast('Objeto invertido horizontalmente!');
+    } else if (direction === 'vertical') {
+      if (item.type === 'line') {
+        const my = (item.y1 + item.y2) / 2;
+        const tempY1 = item.y1;
+        item.y1 = item.y2;
+        item.y2 = tempY1;
+        item.curvature = -item.curvature;
+        recalcLineBoundsAndCurve(item);
+      } else if (item.type === 'connector-round') {
+        const tempY1 = item.y1;
+        item.y1 = item.y2;
+        item.y2 = tempY1;
+        item.elbowRatio = 1 - (item.elbowRatio || 0.5);
+      } else if (item.type === 'bezier') {
+        const cy = item.y + item.height / 2;
+        if (item.points) {
+          item.points.forEach(p => {
+            p.y = 2 * cy - p.y;
+            if (p.cp1) p.cp1.y = 2 * cy - p.cp1.y;
+            if (p.cp2) p.cp2.y = 2 * cy - p.cp2.y;
+          });
+        }
+        recalcBezierBounds(item);
+      } else {
+        item.flipV = !item.flipV;
+      }
+      showToast('Objeto invertido verticalmente!');
+    }
+
+    renderSvgElement(item);
+    renderSelectionOverlay();
+    updateInspector();
+    saveHistoryState();
+  }
+
+  // =========================================================================
+  // SCALE / RESIZE OBJECTS (PRESETS & PROPORTIONAL)
+  // =========================================================================
+
+  function scaleSelectedObject(factor, notify = true) {
+    const item = getSelectedElement();
+    if (!item) {
+      if (notify) showToast('Selecione um objeto para redimensionar!');
+      return;
+    }
+
+    if (!factor || factor <= 0 || isNaN(factor)) return;
+
+    const cx = item.x + item.width / 2;
+    const cy = item.y + item.height / 2;
+
+    if (item.type === 'line') {
+      const mx = (item.x1 + item.x2) / 2;
+      const my = (item.y1 + item.y2) / 2;
+      item.x1 = mx + (item.x1 - mx) * factor;
+      item.y1 = my + (item.y1 - my) * factor;
+      item.x2 = mx + (item.x2 - mx) * factor;
+      item.y2 = my + (item.y2 - my) * factor;
+      if (item.curvature) item.curvature *= factor;
+      recalcLineBoundsAndCurve(item);
+    } else if (item.type === 'connector-round') {
+      const mx = (item.x1 + item.x2) / 2;
+      const my = (item.y1 + item.y2) / 2;
+      item.x1 = mx + (item.x1 - mx) * factor;
+      item.y1 = my + (item.y1 - my) * factor;
+      item.x2 = mx + (item.x2 - mx) * factor;
+      item.y2 = my + (item.y2 - my) * factor;
+      if (item.roundRadius) item.roundRadius = Math.max(0, Math.round(item.roundRadius * factor));
+      item.x = Math.min(item.x1, item.x2);
+      item.y = Math.min(item.y1, item.y2);
+      item.width = Math.max(1, Math.abs(item.x2 - item.x1));
+      item.height = Math.max(1, Math.abs(item.y2 - item.y1));
+    } else if (item.type === 'bezier') {
+      if (item.points) {
+        item.points.forEach(p => {
+          p.x = cx + (p.x - cx) * factor;
+          p.y = cy + (p.y - cy) * factor;
+          if (p.cp1) {
+            p.cp1.x = cx + (p.cp1.x - cx) * factor;
+            p.cp1.y = cy + (p.cp1.y - cy) * factor;
+          }
+          if (p.cp2) {
+            p.cp2.x = cx + (p.cp2.x - cx) * factor;
+            p.cp2.y = cy + (p.cp2.y - cy) * factor;
+          }
+        });
+      }
+      recalcBezierBounds(item);
+    } else if (item.type === 'text') {
+      item.fontSize = Math.max(8, Math.round((item.fontSize || 48) * factor));
+      const newW = Math.max(10, Math.round(item.width * factor));
+      const newH = Math.max(10, Math.round(item.height * factor));
+      item.width = newW;
+      item.height = newH;
+      item.x = Math.round(cx - newW / 2);
+      item.y = Math.round(cy - newH / 2);
+    } else {
+      // rect, circle, polygon
+      const newW = Math.max(2, Math.round(item.width * factor));
+      const newH = Math.max(2, Math.round(item.height * factor));
+      item.width = newW;
+      item.height = newH;
+      item.x = Math.round(cx - newW / 2);
+      item.y = Math.round(cy - newH / 2);
+      if (item.cornerRadius) {
+        item.cornerRadius = Math.max(0, Math.round(item.cornerRadius * factor));
+      }
+    }
+
+    renderSvgElement(item);
+    renderSelectionOverlay();
+    updateInspector();
+    saveHistoryState();
+
+    if (notify) {
+      const pct = Math.round(factor * 100);
+      showToast(`Tamanho redimensionado (${pct}%)!`);
+    }
   }
 
   function clearCanvas() {
@@ -3125,20 +3329,34 @@
     dom.propW.addEventListener('change', (e) => {
       const item = getSelectedElement();
       if (item) {
-        item.width = Math.max(1, parseFloat(e.target.value) || 1);
-        renderSvgElement(item);
-        renderSelectionOverlay();
-        saveHistoryState();
+        const oldW = item.width || 1;
+        const newW = Math.max(1, parseFloat(e.target.value) || 1);
+        if (state.lockAspectRatio && oldW > 0) {
+          scaleSelectedObject(newW / oldW, false);
+        } else {
+          item.width = newW;
+          renderSvgElement(item);
+          renderSelectionOverlay();
+          updateInspector();
+          saveHistoryState();
+        }
       }
     });
 
     dom.propH.addEventListener('change', (e) => {
       const item = getSelectedElement();
       if (item) {
-        item.height = Math.max(1, parseFloat(e.target.value) || 1);
-        renderSvgElement(item);
-        renderSelectionOverlay();
-        saveHistoryState();
+        const oldH = item.height || 1;
+        const newH = Math.max(1, parseFloat(e.target.value) || 1);
+        if (state.lockAspectRatio && oldH > 0) {
+          scaleSelectedObject(newH / oldH, false);
+        } else {
+          item.height = newH;
+          renderSvgElement(item);
+          renderSelectionOverlay();
+          updateInspector();
+          saveHistoryState();
+        }
       }
     });
 
@@ -3152,6 +3370,51 @@
       }
     });
     dom.propRotation.addEventListener('change', () => saveHistoryState());
+
+    // Flip & Invert Buttons
+    if (dom.btnFlipH) {
+      dom.btnFlipH.addEventListener('click', () => flipSelectedObject('horizontal'));
+    }
+    if (dom.btnFlipV) {
+      dom.btnFlipV.addEventListener('click', () => flipSelectedObject('vertical'));
+    }
+
+    // Aspect Ratio Lock Toggle
+    if (dom.btnLockAspect) {
+      dom.btnLockAspect.addEventListener('click', () => {
+        state.lockAspectRatio = !state.lockAspectRatio;
+        updateInspector();
+        showToast(state.lockAspectRatio ? 'Proporção bloqueada' : 'Proporção livre');
+      });
+    }
+
+    // Scale / Resize Buttons
+    if (dom.btnScaleHalf) {
+      dom.btnScaleHalf.addEventListener('click', () => scaleSelectedObject(0.5));
+    }
+    if (dom.btnScaleMinus) {
+      dom.btnScaleMinus.addEventListener('click', () => scaleSelectedObject(0.9));
+    }
+    if (dom.btnScalePlus) {
+      dom.btnScalePlus.addEventListener('click', () => scaleSelectedObject(1.1));
+    }
+    if (dom.btnScaleDouble) {
+      dom.btnScaleDouble.addEventListener('click', () => scaleSelectedObject(2.0));
+    }
+    if (dom.btnScaleApply) {
+      dom.btnScaleApply.addEventListener('click', () => {
+        const pct = parseFloat(dom.propScaleInput.value);
+        if (pct > 0) scaleSelectedObject(pct / 100);
+      });
+    }
+    if (dom.propScaleInput) {
+      dom.propScaleInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          const pct = parseFloat(dom.propScaleInput.value);
+          if (pct > 0) scaleSelectedObject(pct / 100);
+        }
+      });
+    }
 
     // Fill Mode
     dom.fillModeSolid.addEventListener('click', () => {
