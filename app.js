@@ -552,7 +552,7 @@
       }
     }
 
-    if (closed && points.length > 2) {
+    if (closed && points.length >= 2) {
       const last = points[points.length - 1];
       const first = points[0];
       const cp1 = last.cp2 || { x: last.x, y: last.y };
@@ -2788,7 +2788,28 @@
     clone.querySelector('#preview-layer')?.remove();
     clone.querySelector('#selection-layer')?.remove();
     clone.querySelector('#canvas-grid')?.remove();
+    clone.querySelector('#canvas-bg')?.remove();
     clone.querySelectorAll('.hit-stroke').forEach(h => h.remove());
+
+    // Remove grid patterns so they don't bloat the SVG or cause phantom elements on import
+    clone.querySelector('#grid-pattern-small')?.remove();
+    clone.querySelector('#grid-pattern-large')?.remove();
+
+    // Embed project metadata for 100% lossless re-import in Vector Studio
+    const projectData = {
+      version: '1.0',
+      title: (dom.docTitle.value || 'desenho_vetorial').trim(),
+      docWidth: state.docWidth,
+      docHeight: state.docHeight,
+      date: new Date().toISOString(),
+      elements: Array.from(state.elements.values()),
+      nextId: state.nextId
+    };
+
+    const meta = document.createElementNS('http://www.w3.org/2000/svg', 'metadata');
+    meta.id = 'vector-studio-project';
+    meta.textContent = JSON.stringify(projectData);
+    clone.insertBefore(meta, clone.firstChild);
 
     clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
     clone.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
@@ -2820,6 +2841,8 @@
     clone.querySelector('#selection-layer')?.remove();
     clone.querySelector('#canvas-grid')?.remove();
     clone.querySelectorAll('.hit-stroke').forEach(h => h.remove());
+    clone.querySelector('#grid-pattern-small')?.remove();
+    clone.querySelector('#grid-pattern-large')?.remove();
 
     const serializer = new XMLSerializer();
     const svgString = serializer.serializeToString(clone);
@@ -2876,8 +2899,11 @@
             setDocumentDimensions(data.docWidth, data.docHeight, true);
           }
           if (data.elements) {
+            cancelBezierDraft();
+            clearSelection();
             restoreHistoryState(data);
             if (data.title) dom.docTitle.value = data.title;
+            else dom.docTitle.value = file.name.replace(/\.vector\.json$|\.json$/, '');
             showToast('Projeto carregado com sucesso!');
           }
         } catch (err) {
@@ -2890,9 +2916,11 @@
         try {
           const parser = new DOMParser();
           const doc = parser.parseFromString(e.target.result, 'image/svg+xml');
-          parseImportedSvg(doc);
-          showToast('SVG importado com sucesso!');
+          const fileTitle = file.name.replace(/\.svg$/i, '');
+          const count = parseImportedSvg(doc, fileTitle);
+          showToast(`SVG importado com sucesso! (${count} objeto${count === 1 ? '' : 's'})`);
         } catch (err) {
+          console.error('Erro ao processar SVG:', err);
           alert('Erro ao carregar o arquivo SVG.');
         }
       };
@@ -2900,44 +2928,306 @@
     }
   }
 
-  function parseImportedSvg(doc) {
+  // Parse SVG path "d" string into Bézier node points and closed flag
+  function parseSvgPathD(d) {
+    if (!d || typeof d !== 'string') return { points: [], closed: false };
+
+    const regex = /([a-df-z])|([-+]?(?:\d*\.\d+|\d+)(?:[eE][-+]?\d+)?)/gi;
+    const tokens = [];
+    let m;
+    while ((m = regex.exec(d)) !== null) {
+      tokens.push(m[0]);
+    }
+
+    let i = 0;
+    let currentX = 0;
+    let currentY = 0;
+    let startX = 0;
+    let startY = 0;
+    const points = [];
+    let closed = false;
+    let lastCommand = '';
+    let prevCp2 = null;
+
+    while (i < tokens.length) {
+      let token = tokens[i];
+      let isCommand = /^[a-df-z]$/i.test(token);
+      let cmd = isCommand ? token : lastCommand;
+      if (isCommand) i++;
+
+      if (!cmd) break;
+
+      const isRel = cmd === cmd.toLowerCase();
+      const upper = cmd.toUpperCase();
+      lastCommand = cmd;
+
+      if (upper === 'M') {
+        const x = (isRel ? currentX : 0) + parseFloat(tokens[i++]);
+        const y = (isRel ? currentY : 0) + parseFloat(tokens[i++]);
+        currentX = x;
+        currentY = y;
+        startX = x;
+        startY = y;
+        points.push({ x, y, cp1: null, cp2: null, smooth: false });
+        prevCp2 = null;
+        lastCommand = isRel ? 'l' : 'L';
+      } else if (upper === 'L') {
+        const x = (isRel ? currentX : 0) + parseFloat(tokens[i++]);
+        const y = (isRel ? currentY : 0) + parseFloat(tokens[i++]);
+        currentX = x;
+        currentY = y;
+        points.push({ x, y, cp1: null, cp2: null, smooth: false });
+        prevCp2 = null;
+      } else if (upper === 'H') {
+        const x = (isRel ? currentX : 0) + parseFloat(tokens[i++]);
+        currentX = x;
+        points.push({ x, y: currentY, cp1: null, cp2: null, smooth: false });
+        prevCp2 = null;
+      } else if (upper === 'V') {
+        const y = (isRel ? currentY : 0) + parseFloat(tokens[i++]);
+        currentY = y;
+        points.push({ x: currentX, y, cp1: null, cp2: null, smooth: false });
+        prevCp2 = null;
+      } else if (upper === 'C') {
+        const cp1x = (isRel ? currentX : 0) + parseFloat(tokens[i++]);
+        const cp1y = (isRel ? currentY : 0) + parseFloat(tokens[i++]);
+        const cp2x = (isRel ? currentX : 0) + parseFloat(tokens[i++]);
+        const cp2y = (isRel ? currentY : 0) + parseFloat(tokens[i++]);
+        const x = (isRel ? currentX : 0) + parseFloat(tokens[i++]);
+        const y = (isRel ? currentY : 0) + parseFloat(tokens[i++]);
+
+        if (points.length > 0) {
+          points[points.length - 1].cp2 = { x: cp1x, y: cp1y };
+        }
+        points.push({
+          x,
+          y,
+          cp1: { x: cp2x, y: cp2y },
+          cp2: null,
+          smooth: true
+        });
+        prevCp2 = { x: cp2x, y: cp2y };
+        currentX = x;
+        currentY = y;
+      } else if (upper === 'S') {
+        let cp1x = currentX;
+        let cp1y = currentY;
+        if (prevCp2) {
+          cp1x = 2 * currentX - prevCp2.x;
+          cp1y = 2 * currentY - prevCp2.y;
+        }
+        const cp2x = (isRel ? currentX : 0) + parseFloat(tokens[i++]);
+        const cp2y = (isRel ? currentY : 0) + parseFloat(tokens[i++]);
+        const x = (isRel ? currentX : 0) + parseFloat(tokens[i++]);
+        const y = (isRel ? currentY : 0) + parseFloat(tokens[i++]);
+
+        if (points.length > 0) {
+          points[points.length - 1].cp2 = { x: cp1x, y: cp1y };
+        }
+        points.push({
+          x,
+          y,
+          cp1: { x: cp2x, y: cp2y },
+          cp2: null,
+          smooth: true
+        });
+        prevCp2 = { x: cp2x, y: cp2y };
+        currentX = x;
+        currentY = y;
+      } else if (upper === 'Q') {
+        const qx = (isRel ? currentX : 0) + parseFloat(tokens[i++]);
+        const qy = (isRel ? currentY : 0) + parseFloat(tokens[i++]);
+        const x = (isRel ? currentX : 0) + parseFloat(tokens[i++]);
+        const y = (isRel ? currentY : 0) + parseFloat(tokens[i++]);
+
+        const cp1x = currentX + (2 / 3) * (qx - currentX);
+        const cp1y = currentY + (2 / 3) * (qy - currentY);
+        const cp2x = x + (2 / 3) * (qx - x);
+        const cp2y = y + (2 / 3) * (qy - y);
+
+        if (points.length > 0) {
+          points[points.length - 1].cp2 = { x: cp1x, y: cp1y };
+        }
+        points.push({
+          x,
+          y,
+          cp1: { x: cp2x, y: cp2y },
+          cp2: null,
+          smooth: true
+        });
+        prevCp2 = { x: cp2x, y: cp2y };
+        currentX = x;
+        currentY = y;
+      } else if (upper === 'T') {
+        let qx = currentX;
+        let qy = currentY;
+        if (prevCp2) {
+          qx = 2 * currentX - prevCp2.x;
+          qy = 2 * currentY - prevCp2.y;
+        }
+        const x = (isRel ? currentX : 0) + parseFloat(tokens[i++]);
+        const y = (isRel ? currentY : 0) + parseFloat(tokens[i++]);
+
+        const cp1x = currentX + (2 / 3) * (qx - currentX);
+        const cp1y = currentY + (2 / 3) * (qy - currentY);
+        const cp2x = x + (2 / 3) * (qx - x);
+        const cp2y = y + (2 / 3) * (qy - y);
+
+        if (points.length > 0) {
+          points[points.length - 1].cp2 = { x: cp1x, y: cp1y };
+        }
+        points.push({
+          x,
+          y,
+          cp1: { x: cp2x, y: cp2y },
+          cp2: null,
+          smooth: true
+        });
+        prevCp2 = { x: cp2x, y: cp2y };
+        currentX = x;
+        currentY = y;
+      } else if (upper === 'A') {
+        const rx = parseFloat(tokens[i++]);
+        const ry = parseFloat(tokens[i++]);
+        const rot = parseFloat(tokens[i++]);
+        const laf = parseFloat(tokens[i++]);
+        const sf = parseFloat(tokens[i++]);
+        const x = (isRel ? currentX : 0) + parseFloat(tokens[i++]);
+        const y = (isRel ? currentY : 0) + parseFloat(tokens[i++]);
+        points.push({ x, y, cp1: null, cp2: null, smooth: false });
+        prevCp2 = null;
+        currentX = x;
+        currentY = y;
+      } else if (upper === 'Z') {
+        closed = true;
+        currentX = startX;
+        currentY = startY;
+        prevCp2 = null;
+        if (points.length > 1) {
+          const first = points[0];
+          const last = points[points.length - 1];
+          if (Math.hypot(last.x - first.x, last.y - first.y) < 1.5) {
+            if (last.cp1 && !first.cp1) first.cp1 = last.cp1;
+            points.pop();
+          }
+        }
+      } else {
+        i++;
+      }
+    }
+
+    return { points, closed };
+  }
+
+  // Parse SVG polygon/polyline points string
+  function parseSvgPoints(pointsStr) {
+    if (!pointsStr || typeof pointsStr !== 'string') return [];
+    const coords = pointsStr.trim().split(/[\s,]+/).map(parseFloat).filter(n => !isNaN(n));
+    const pts = [];
+    for (let i = 0; i < coords.length - 1; i += 2) {
+      pts.push({ x: coords[i], y: coords[i + 1], cp1: null, cp2: null, smooth: false });
+    }
+    return pts;
+  }
+
+  function parseImportedSvg(doc, fileTitle) {
+    // 1. Check for embedded Vector Studio project metadata first
+    const metaEl = doc.querySelector('#vector-studio-project, #vector-studio-data, metadata[id="vector-studio-project"], desc[id="vector-studio-data"]');
+    if (metaEl && metaEl.textContent && metaEl.textContent.trim()) {
+      try {
+        const project = JSON.parse(metaEl.textContent.trim());
+        if (project && Array.isArray(project.elements)) {
+          if (project.docWidth && project.docHeight) {
+            setDocumentDimensions(project.docWidth, project.docHeight, true);
+          }
+          cancelBezierDraft();
+          clearSelection();
+          restoreHistoryState(project);
+          if (project.title && dom.docTitle) dom.docTitle.value = project.title;
+          else if (fileTitle && dom.docTitle) dom.docTitle.value = fileTitle;
+          saveHistoryState();
+          return project.elements.length;
+        }
+      } catch (err) {
+        console.warn('Erro ao restaurar metadados do Vector Studio, utilizando analisador padrão:', err);
+      }
+    }
+
+    // 2. Fallback / Standard SVG Parser
+    const parserError = doc.querySelector('parsererror');
+    if (parserError) {
+      alert('O arquivo SVG contém erros de formatação XML e não pôde ser aberto.');
+      return 0;
+    }
+
     const rootSvg = doc.querySelector('svg');
     if (rootSvg) {
-      const w = parseFloat(rootSvg.getAttribute('width'));
-      const h = parseFloat(rootSvg.getAttribute('height'));
+      let w = parseFloat(rootSvg.getAttribute('width'));
+      let h = parseFloat(rootSvg.getAttribute('height'));
+      if ((!w || !h || isNaN(w) || isNaN(h)) && rootSvg.getAttribute('viewBox')) {
+        const vb = rootSvg.getAttribute('viewBox').trim().split(/[\s,]+/).map(parseFloat);
+        if (vb.length === 4 && vb[2] > 0 && vb[3] > 0) {
+          w = vb[2];
+          h = vb[3];
+        }
+      }
       if (w > 0 && h > 0) {
         setDocumentDimensions(w, h, true);
       }
     }
 
-    const shapes = doc.querySelectorAll('rect, circle, ellipse, line, path, polygon, text');
+    if (fileTitle && dom.docTitle) {
+      dom.docTitle.value = fileTitle;
+    }
+
+    cancelBezierDraft();
+    clearSelection();
     dom.shapesLayer.innerHTML = '';
     state.elements.clear();
 
-    shapes.forEach(el => {
+    // Copy any linear/radial gradients from SVG defs to dom.svgDefs so gradient fills resolve
+    const importedGradients = doc.querySelectorAll('linearGradient, radialGradient');
+    importedGradients.forEach(grad => {
+      const existing = dom.svgDefs.querySelector(`#${grad.id}`);
+      if (existing) existing.remove();
+      dom.svgDefs.appendChild(grad.cloneNode(true));
+    });
+
+    // Select shape elements: if #shapes-layer exists, read directly from it; otherwise select visual shapes outside defs
+    const shapesLayerInDoc = doc.querySelector('#shapes-layer');
+    let shapeNodes = [];
+    if (shapesLayerInDoc) {
+      shapeNodes = Array.from(shapesLayerInDoc.querySelectorAll('rect, circle, ellipse, line, path, polygon, polyline, text'));
+    } else {
+      shapeNodes = Array.from(doc.querySelectorAll('rect, circle, ellipse, line, path, polygon, polyline, text')).filter(el => {
+        return !el.closest('defs, pattern, clipPath, mask, symbol, metadata, style');
+      });
+    }
+
+    let importedCount = 0;
+
+    shapeNodes.forEach(el => {
       const tag = el.tagName.toLowerCase();
+      // Skip canvas background, grid background, and hit stroke interaction paths
       if (el.id === 'canvas-bg' || el.id === 'canvas-grid' || el.classList.contains('hit-stroke')) return;
+      if (el.closest('#preview-layer, #selection-layer')) return;
 
       const id = `shape_${state.nextId++}`;
-      let shapeType = 'rect';
-      if (tag === 'ellipse' || tag === 'circle') shapeType = 'circle';
-      else if (tag === 'line' || tag === 'path') shapeType = 'line';
-      else if (tag === 'polygon') shapeType = 'polygon';
-      else if (tag === 'text') shapeType = 'text';
-
-      let item = createNewShape(shapeType, 0, 0);
-      item.id = id;
+      let item = null;
 
       if (tag === 'rect') {
+        item = createNewShape('rect', 0, 0);
+        item.id = id;
         item.x = parseFloat(el.getAttribute('x') || 0);
         item.y = parseFloat(el.getAttribute('y') || 0);
         item.width = parseFloat(el.getAttribute('width') || 100);
         item.height = parseFloat(el.getAttribute('height') || 100);
-        item.cornerRadius = parseFloat(el.getAttribute('rx') || 0);
+        item.cornerRadius = parseFloat(el.getAttribute('rx') || el.getAttribute('ry') || 0);
       } else if (tag === 'circle' || tag === 'ellipse') {
-        item.type = 'circle';
+        item = createNewShape('circle', 0, 0);
+        item.id = id;
         const rx = parseFloat(el.getAttribute('r') || el.getAttribute('rx') || 50);
-        const ry = parseFloat(el.getAttribute('r') || el.getAttribute('ry') || 50);
+        const ry = parseFloat(el.getAttribute('r') || el.getAttribute('ry') || rx);
         const cx = parseFloat(el.getAttribute('cx') || rx);
         const cy = parseFloat(el.getAttribute('cy') || ry);
         item.x = cx - rx;
@@ -2945,14 +3235,37 @@
         item.width = rx * 2;
         item.height = ry * 2;
       } else if (tag === 'line') {
+        item = createNewShape('line', 0, 0);
+        item.id = id;
         item.x1 = parseFloat(el.getAttribute('x1') || 0);
         item.y1 = parseFloat(el.getAttribute('y1') || 0);
         item.x2 = parseFloat(el.getAttribute('x2') || 100);
         item.y2 = parseFloat(el.getAttribute('y2') || 100);
         item.isCurved = false;
         recalcLineBoundsAndCurve(item);
+      } else if (tag === 'path') {
+        const d = el.getAttribute('d');
+        if (!d) return;
+        const parsed = parseSvgPathD(d);
+        if (!parsed.points || parsed.points.length === 0) return;
+
+        item = createNewShape('bezier', parsed.points[0].x, parsed.points[0].y);
+        item.id = id;
+        item.points = parsed.points;
+        item.closed = parsed.closed;
+        recalcBezierBounds(item);
+      } else if (tag === 'polygon' || tag === 'polyline') {
+        const pts = parseSvgPoints(el.getAttribute('points'));
+        if (!pts || pts.length < 2) return;
+
+        item = createNewShape('bezier', pts[0].x, pts[0].y);
+        item.id = id;
+        item.points = pts;
+        item.closed = tag === 'polygon';
+        recalcBezierBounds(item);
       } else if (tag === 'text') {
-        item.type = 'text';
+        item = createNewShape('text', 0, 0);
+        item.id = id;
         item.x = parseFloat(el.getAttribute('x') || 0);
         item.y = parseFloat(el.getAttribute('y') || 0);
         item.text = el.textContent || 'Texto';
@@ -2964,26 +3277,100 @@
         item.textAlign = anchor === 'middle' ? 'center' : (anchor === 'end' ? 'right' : 'left');
       }
 
-      const fill = el.getAttribute('fill');
-      if (fill && fill !== 'none') {
-        item.fillType = 'solid';
-        item.fillColor = fill;
-      } else if (fill === 'none') {
-        item.fillType = 'none';
+      if (!item) return;
+
+      function getStyleVal(node, attr) {
+        if (!node) return null;
+        if (node.getAttribute && node.getAttribute(attr)) return node.getAttribute(attr);
+        if (node.style && node.style.getPropertyValue(attr)) return node.style.getPropertyValue(attr);
+        return null;
       }
 
-      const stroke = el.getAttribute('stroke');
+      const fill = getStyleVal(el, 'fill') || (el.parentElement ? getStyleVal(el.parentElement, 'fill') : null);
+      if (fill && fill !== 'none') {
+        if (fill.startsWith('url(')) {
+          const gradIdMatch = fill.match(/#([^"')]+)/);
+          if (gradIdMatch) {
+            item.fillType = 'gradient';
+            item.gradient.id = gradIdMatch[1];
+          } else {
+            item.fillType = 'solid';
+            item.fillColor = '#3b82f6';
+          }
+        } else {
+          item.fillType = 'solid';
+          item.fillColor = fill;
+        }
+      } else if (fill === 'none') {
+        item.fillType = 'none';
+      } else {
+        if (item.type === 'line' || (item.type === 'bezier' && !item.closed)) {
+          item.fillType = 'none';
+        } else {
+          item.fillType = 'solid';
+        }
+      }
+
+      const fillOpacity = getStyleVal(el, 'fill-opacity') || getStyleVal(el, 'opacity');
+      if (fillOpacity !== null && fillOpacity !== undefined) {
+        const fo = parseFloat(fillOpacity);
+        if (!isNaN(fo)) item.fillOpacity = fo;
+      }
+
+      const stroke = getStyleVal(el, 'stroke') || (el.parentElement ? getStyleVal(el.parentElement, 'stroke') : null);
       if (stroke && stroke !== 'none') {
         item.hasStroke = true;
         item.strokeColor = stroke;
-        item.strokeWidth = parseFloat(el.getAttribute('stroke-width') || 2);
+        const sw = parseFloat(getStyleVal(el, 'stroke-width') || (el.parentElement ? getStyleVal(el.parentElement, 'stroke-width') : 0));
+        if (!isNaN(sw) && sw > 0) item.strokeWidth = sw;
+        const cap = getStyleVal(el, 'stroke-linecap');
+        if (cap) item.strokeCap = cap;
+        const dash = getStyleVal(el, 'stroke-dasharray');
+        if (dash && dash !== 'none') {
+          item.strokeDash = dash.includes(' ') ? 'dashed' : 'solid';
+        }
+      } else if (stroke === 'none') {
+        item.hasStroke = false;
+        item.strokeWidth = 0;
+      }
+
+      const transform = el.getAttribute('transform') || (el.parentElement ? el.parentElement.getAttribute('transform') : null);
+      if (transform) {
+        const rotMatch = transform.match(/rotate\(\s*([-\d.]+)/);
+        if (rotMatch) {
+          item.rotation = parseFloat(rotMatch[1]) || 0;
+        }
+        const transMatch = transform.match(/translate\(\s*([-\d.]+)(?:[\s,]+([-\d.]+))?\)/);
+        if (transMatch) {
+          const tx = parseFloat(transMatch[1]) || 0;
+          const ty = parseFloat(transMatch[2]) || 0;
+          if (item.type === 'rect' || item.type === 'circle' || item.type === 'text') {
+            item.x += tx;
+            item.y += ty;
+          } else if (item.type === 'line') {
+            item.x1 += tx; item.x2 += tx; item.cx += tx;
+            item.y1 += ty; item.y2 += ty; item.cy += ty;
+            recalcLineBoundsAndCurve(item);
+          } else if (item.type === 'bezier' && item.points) {
+            item.points.forEach(p => {
+              p.x += tx; p.y += ty;
+              if (p.cp1) { p.cp1.x += tx; p.cp1.y += ty; }
+              if (p.cp2) { p.cp2.x += tx; p.cp2.y += ty; }
+            });
+            recalcBezierBounds(item);
+          }
+        }
       }
 
       state.elements.set(item.id, item);
       renderSvgElement(item);
+      importedCount++;
     });
 
+    renderSelectionOverlay();
+    updateInspector();
     saveHistoryState();
+    return importedCount;
   }
 
   // =========================================================================
