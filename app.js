@@ -29,7 +29,13 @@
     bezierDraft: null, // { points: [{x, y, cp1, cp2, smooth}], closed: false }
     docWidth: 1200,
     docHeight: 800,
-    elements: new Map() // id -> element data object
+    elements: new Map(), // id -> element data object
+    // Mobile Touch & Multi-Touch Gestures
+    touchStartDist: 0,
+    touchStartZoom: 1,
+    touchStartMid: { x: 0, y: 0 },
+    touchStartPan: { x: 0, y: 0 },
+    isMultiTouch: false
   };
 
   // DOM Elements Cache
@@ -172,7 +178,44 @@
     // Bottom Palette
     btnTargetFill: document.getElementById('btn-target-fill'),
     btnTargetStroke: document.getElementById('btn-target-stroke'),
-    quickCustomColor: document.getElementById('quick-custom-color')
+    quickCustomColor: document.getElementById('quick-custom-color'),
+
+    // Text Tool Elements
+    toolText: document.getElementById('tool-text'),
+    rowTextProps: document.getElementById('row-text-props'),
+    propTextContent: document.getElementById('prop-text-content'),
+    propFontFamily: document.getElementById('prop-font-family'),
+    propFontSizeInput: document.getElementById('prop-font-size-input'),
+    propFontSizeSlider: document.getElementById('prop-font-size-slider'),
+    btnFont24: document.getElementById('btn-font-24'),
+    btnFont48: document.getElementById('btn-font-48'),
+    btnFont72: document.getElementById('btn-font-72'),
+    btnFont96: document.getElementById('btn-font-96'),
+    btnTextBold: document.getElementById('btn-text-bold'),
+    btnTextItalic: document.getElementById('btn-text-italic'),
+    btnAlignLeft: document.getElementById('btn-align-left'),
+    btnAlignCenter: document.getElementById('btn-align-center'),
+    btnAlignRight: document.getElementById('btn-align-right'),
+
+    // Mobile Elements
+    inspectorPanel: document.getElementById('inspector-panel'),
+    btnCloseInspector: document.getElementById('btn-close-inspector'),
+    btnMobileInspector: document.getElementById('btn-mobile-inspector'),
+    mobileInspectorBtnText: document.getElementById('mobile-inspector-btn-text'),
+    btnMobileInspectorToggle: document.getElementById('btn-mobile-inspector-toggle'),
+    mobileSelectedDot: document.getElementById('mobile-selected-dot'),
+    mobileMenuSheet: document.getElementById('mobile-menu-sheet'),
+    mobileSheetBackdrop: document.getElementById('mobile-sheet-backdrop'),
+    btnMobileMenuToggle: document.getElementById('btn-mobile-menu-toggle'),
+    btnCloseMobileMenu: document.getElementById('btn-close-mobile-menu'),
+    mobileDocTitle: document.getElementById('mobile-doc-title'),
+    mobileDocW: document.getElementById('mobile-doc-w'),
+    mobileDocH: document.getElementById('mobile-doc-h'),
+    btnMobileExportSvg: document.getElementById('btn-mobile-export-svg'),
+    btnMobileExportPng: document.getElementById('btn-mobile-export-png'),
+    btnMobileSaveJson: document.getElementById('btn-mobile-save-json'),
+    mobileFileInput: document.getElementById('mobile-file-input'),
+    btnMobileClear: document.getElementById('btn-mobile-clear')
   };
 
   // Initialize
@@ -395,6 +438,20 @@
       baseData.fillType = 'none';
       baseData.strokeWidth = 3;
       baseData.strokeColor = '#06b6d4';
+    } else if (type === 'text') {
+      baseData.text = 'Texto Vetorial';
+      baseData.fontFamily = "'Inter', sans-serif";
+      baseData.fontSize = 48;
+      baseData.fontWeight = 'bold';
+      baseData.fontStyle = 'normal';
+      baseData.textAlign = 'left';
+      baseData.fillType = 'solid';
+      baseData.fillColor = defaultColor;
+      baseData.strokeColor = '#ffffff';
+      baseData.strokeWidth = 2;
+      baseData.hasStroke = false;
+      baseData.width = 240;
+      baseData.height = 54;
     }
 
     return baseData;
@@ -643,7 +700,7 @@
       return group;
     }
 
-    // Rect, Circle, Polygon
+    // Rect, Circle, Polygon, Text
     if (isNew) {
       if (data.type === 'rect') {
         el = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
@@ -651,6 +708,9 @@
         el = document.createElementNS('http://www.w3.org/2000/svg', 'ellipse');
       } else if (data.type === 'polygon') {
         el = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+      } else if (data.type === 'text') {
+        el = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        el.classList.add('svg-text');
       }
       el.id = data.id;
       el.classList.add('svg-element');
@@ -664,6 +724,20 @@
           startMoving(e);
         }
       });
+
+      if (data.type === 'text') {
+        el.addEventListener('dblclick', (e) => {
+          e.stopPropagation();
+          selectElement(data.id);
+          if (dom.propTextContent) {
+            dom.propTextContent.focus();
+            dom.propTextContent.select();
+          }
+          if (window.innerWidth <= 900 && dom.inspectorPanel) {
+            dom.inspectorPanel.classList.add('mobile-open');
+          }
+        });
+      }
     }
 
     if (data.type === 'rect') {
@@ -683,6 +757,29 @@
     } else if (data.type === 'polygon') {
       const pts = computePolygonPoints(data.x, data.y, data.width, data.height, data.polyPoints || 5);
       el.setAttribute('points', pts);
+    } else if (data.type === 'text') {
+      el.textContent = data.text !== undefined ? data.text : 'Texto Vetorial';
+      el.setAttribute('font-family', data.fontFamily || "'Inter', sans-serif");
+      el.setAttribute('font-size', data.fontSize || 48);
+      el.setAttribute('font-weight', data.fontWeight || 'bold');
+      el.setAttribute('font-style', data.fontStyle || 'normal');
+      el.setAttribute('dominant-baseline', 'hanging');
+      el.style.paintOrder = 'stroke fill';
+
+      let textX = data.x;
+      if (data.textAlign === 'center') textX = data.x + data.width / 2;
+      else if (data.textAlign === 'right') textX = data.x + data.width;
+      el.setAttribute('x', textX);
+      el.setAttribute('y', data.y);
+      el.setAttribute('text-anchor', data.textAlign === 'center' ? 'middle' : (data.textAlign === 'right' ? 'end' : 'start'));
+
+      try {
+        const bbox = el.getBBox();
+        if (bbox.width > 0 && bbox.height > 0) {
+          data.width = Math.max(10, Math.round(bbox.width));
+          data.height = Math.max(10, Math.round(bbox.height));
+        }
+      } catch (_) {}
     }
 
     if (data.rotation) {
@@ -1126,6 +1223,7 @@
       origY: item.y,
       origW: item.width,
       origH: item.height,
+      origFontSize: item.fontSize || 48,
       shiftKey: e.shiftKey
     };
   }
@@ -1680,6 +1778,26 @@
       return;
     }
 
+    // Text Tool: place text at click position
+    if (state.tool === 'text') {
+      const newText = createNewShape('text', pt.x, pt.y);
+      applyCurrentDefaultStyles(newText);
+      state.elements.set(newText.id, newText);
+      renderSvgElement(newText);
+      selectElement(newText.id);
+      saveHistoryState();
+      setTool('select');
+      if (dom.propTextContent) {
+        dom.propTextContent.focus();
+        dom.propTextContent.select();
+      }
+      if (window.innerWidth <= 900 && dom.inspectorPanel) {
+        dom.inspectorPanel.classList.add('mobile-open');
+      }
+      showToast('Texto inserido! Edite o conteúdo ou fonte no painel.');
+      return;
+    }
+
     // New shape creation (line, connector-round, rect, circle, polygon)
     state.isDrawing = true;
     state.drawStart = pt;
@@ -1826,6 +1944,11 @@
         const ratio = t.origW / t.origH;
         if (newW / ratio < newH) newH = newW / ratio;
         else newW = newH * ratio;
+      }
+
+      if (item.type === 'text' && t.origFontSize) {
+        const scale = Math.max(0.1, newH / (t.origH || 1));
+        item.fontSize = Math.max(8, Math.min(500, Math.round(t.origFontSize * scale)));
       }
 
       item.x = newX;
@@ -1996,11 +2119,19 @@
       dom.inspectorEmpty.style.display = 'flex';
       dom.inspectorActive.style.display = 'none';
       dom.selectedBadge.textContent = 'Nenhum objeto';
+      if (dom.mobileSelectedDot) dom.mobileSelectedDot.classList.remove('active');
+      if (dom.btnMobileInspector) dom.btnMobileInspector.classList.remove('has-selection');
+      if (dom.mobileInspectorBtnText) dom.mobileInspectorBtnText.textContent = 'Propriedades';
       return;
     }
 
     dom.inspectorEmpty.style.display = 'none';
     dom.inspectorActive.style.display = 'flex';
+    if (dom.mobileSelectedDot) dom.mobileSelectedDot.classList.add('active');
+    if (dom.btnMobileInspector) dom.btnMobileInspector.classList.add('has-selection');
+    if (dom.mobileInspectorBtnText) {
+      dom.mobileInspectorBtnText.textContent = item.type === 'text' ? 'Editar Texto' : 'Editar Objeto';
+    }
 
     // Type Badge
     let typeName = 'Objeto';
@@ -2010,7 +2141,24 @@
     else if (item.type === 'connector-round') typeName = 'Conector Redondo de Ângulo Reto';
     else if (item.type === 'bezier') typeName = item.closed ? `Forma Geométrica Bézier (${item.points ? item.points.length : 0} nós)` : `Caminho Bézier Aberto (${item.points ? item.points.length : 0} nós)`;
     else if (item.type === 'polygon') typeName = `Polígono (${item.polyPoints} pt)`;
+    else if (item.type === 'text') typeName = 'Texto Vetorial';
     dom.selectedBadge.textContent = typeName;
+
+    // Text Properties
+    if (item.type === 'text' && dom.rowTextProps) {
+      dom.rowTextProps.style.display = 'block';
+      if (dom.propTextContent) dom.propTextContent.value = item.text !== undefined ? item.text : '';
+      if (dom.propFontFamily) dom.propFontFamily.value = item.fontFamily || "'Inter', sans-serif";
+      if (dom.propFontSizeInput) dom.propFontSizeInput.value = item.fontSize || 48;
+      if (dom.propFontSizeSlider) dom.propFontSizeSlider.value = Math.min(180, item.fontSize || 48);
+      if (dom.btnTextBold) dom.btnTextBold.classList.toggle('active', item.fontWeight === 'bold' || item.fontWeight >= 700);
+      if (dom.btnTextItalic) dom.btnTextItalic.classList.toggle('active', item.fontStyle === 'italic');
+      if (dom.btnAlignLeft) dom.btnAlignLeft.classList.toggle('active', !item.textAlign || item.textAlign === 'left');
+      if (dom.btnAlignCenter) dom.btnAlignCenter.classList.toggle('active', item.textAlign === 'center');
+      if (dom.btnAlignRight) dom.btnAlignRight.classList.toggle('active', item.textAlign === 'right');
+    } else if (dom.rowTextProps) {
+      dom.rowTextProps.style.display = 'none';
+    }
 
     // Converter Quadro em Círculo
     if (item.type === 'rect') {
@@ -2558,7 +2706,7 @@
       }
     }
 
-    const shapes = doc.querySelectorAll('rect, circle, ellipse, line, path, polygon');
+    const shapes = doc.querySelectorAll('rect, circle, ellipse, line, path, polygon, text');
     dom.shapesLayer.innerHTML = '';
     state.elements.clear();
 
@@ -2571,6 +2719,7 @@
       if (tag === 'ellipse' || tag === 'circle') shapeType = 'circle';
       else if (tag === 'line' || tag === 'path') shapeType = 'line';
       else if (tag === 'polygon') shapeType = 'polygon';
+      else if (tag === 'text') shapeType = 'text';
 
       let item = createNewShape(shapeType, 0, 0);
       item.id = id;
@@ -2598,6 +2747,17 @@
         item.y2 = parseFloat(el.getAttribute('y2') || 100);
         item.isCurved = false;
         recalcLineBoundsAndCurve(item);
+      } else if (tag === 'text') {
+        item.type = 'text';
+        item.x = parseFloat(el.getAttribute('x') || 0);
+        item.y = parseFloat(el.getAttribute('y') || 0);
+        item.text = el.textContent || 'Texto';
+        item.fontSize = parseFloat(el.getAttribute('font-size') || 48);
+        item.fontFamily = el.getAttribute('font-family') || "'Inter', sans-serif";
+        item.fontWeight = el.getAttribute('font-weight') || 'bold';
+        item.fontStyle = el.getAttribute('font-style') || 'normal';
+        const anchor = el.getAttribute('text-anchor');
+        item.textAlign = anchor === 'middle' ? 'center' : (anchor === 'end' ? 'right' : 'left');
       }
 
       const fill = el.getAttribute('fill');
@@ -2650,6 +2810,67 @@
     dom.viewport.addEventListener('pointerdown', handlePointerDown);
     window.addEventListener('pointermove', handlePointerMove);
     window.addEventListener('pointerup', handlePointerUp);
+
+    // Multi-touch gestures (Pinch-to-zoom and two-finger pan for mobile devices)
+    dom.viewport.addEventListener('touchstart', (e) => {
+      if (e.touches.length === 2) {
+        state.isMultiTouch = true;
+        state.isDrawing = false;
+        if (state.currentDrawingShape) {
+          const el = document.getElementById(state.currentDrawingShape.id);
+          if (el) el.remove();
+          state.currentDrawingShape = null;
+        }
+        state.transforming = null;
+
+        const t1 = e.touches[0];
+        const t2 = e.touches[1];
+        state.touchStartDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+        state.touchStartZoom = state.zoom;
+        state.touchStartMid = { x: (t1.clientX + t2.clientX) / 2, y: (t1.clientY + t2.clientY) / 2 };
+        state.touchStartPan = { x: state.pan.x, y: state.pan.y };
+      }
+    }, { passive: false });
+
+    dom.viewport.addEventListener('touchmove', (e) => {
+      if (e.touches.length === 2 && state.isMultiTouch) {
+        e.preventDefault();
+        const t1 = e.touches[0];
+        const t2 = e.touches[1];
+        const currDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+        const currMid = { x: (t1.clientX + t2.clientX) / 2, y: (t1.clientY + t2.clientY) / 2 };
+
+        const scale = currDist / (state.touchStartDist || 1);
+        const newZoom = Math.max(0.15, Math.min(8, state.touchStartZoom * scale));
+
+        const rect = dom.viewport.getBoundingClientRect();
+        const startMidX = state.touchStartMid.x - rect.left;
+        const startMidY = state.touchStartMid.y - rect.top;
+        const dMidX = currMid.x - state.touchStartMid.x;
+        const dMidY = currMid.y - state.touchStartMid.y;
+
+        const svgX = (startMidX - state.touchStartPan.x) / state.touchStartZoom;
+        const svgY = (startMidY - state.touchStartPan.y) / state.touchStartZoom;
+
+        state.zoom = newZoom;
+        state.pan.x = startMidX - svgX * newZoom + dMidX;
+        state.pan.y = startMidY - svgY * newZoom + dMidY;
+
+        applyTransform();
+        updateZoomDisplay();
+      }
+    }, { passive: false });
+
+    dom.viewport.addEventListener('touchend', (e) => {
+      if (state.isMultiTouch && e.touches.length < 2) {
+        state.isMultiTouch = false;
+      }
+    });
+
+    dom.viewport.addEventListener('touchcancel', () => {
+      state.isMultiTouch = false;
+    });
+
     dom.viewport.addEventListener('dblclick', (e) => {
       if (state.tool === 'bezier' && state.bezierDraft) {
         e.preventDefault();
@@ -3121,6 +3342,179 @@
     dom.btnDuplicate.addEventListener('click', duplicateSelected);
     dom.btnDelete.addEventListener('click', deleteSelected);
 
+    // Text Tool Properties Listeners
+    if (dom.propTextContent) {
+      dom.propTextContent.addEventListener('input', (e) => {
+        const item = getSelectedElement();
+        if (item && item.type === 'text') {
+          item.text = e.target.value;
+          renderSvgElement(item);
+          renderSelectionOverlay();
+        }
+      });
+      dom.propTextContent.addEventListener('change', () => saveHistoryState());
+    }
+
+    if (dom.propFontFamily) {
+      dom.propFontFamily.addEventListener('change', (e) => {
+        const item = getSelectedElement();
+        if (item && item.type === 'text') {
+          item.fontFamily = e.target.value;
+          renderSvgElement(item);
+          renderSelectionOverlay();
+          saveHistoryState();
+        }
+      });
+    }
+
+    const setItemFontSize = (size) => {
+      const item = getSelectedElement();
+      if (item && item.type === 'text') {
+        const s = Math.max(8, Math.min(500, parseInt(size, 10) || 48));
+        item.fontSize = s;
+        if (dom.propFontSizeInput) dom.propFontSizeInput.value = s;
+        if (dom.propFontSizeSlider) dom.propFontSizeSlider.value = Math.min(180, s);
+        renderSvgElement(item);
+        renderSelectionOverlay();
+        saveHistoryState();
+      }
+    };
+
+    if (dom.propFontSizeSlider) {
+      dom.propFontSizeSlider.addEventListener('input', (e) => setItemFontSize(e.target.value));
+    }
+    if (dom.propFontSizeInput) {
+      dom.propFontSizeInput.addEventListener('change', (e) => setItemFontSize(e.target.value));
+      dom.propFontSizeInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') setItemFontSize(e.target.value); });
+    }
+
+    if (dom.btnFont24) dom.btnFont24.addEventListener('click', () => setItemFontSize(24));
+    if (dom.btnFont48) dom.btnFont48.addEventListener('click', () => setItemFontSize(48));
+    if (dom.btnFont72) dom.btnFont72.addEventListener('click', () => setItemFontSize(72));
+    if (dom.btnFont96) dom.btnFont96.addEventListener('click', () => setItemFontSize(96));
+
+    if (dom.btnTextBold) {
+      dom.btnTextBold.addEventListener('click', () => {
+        const item = getSelectedElement();
+        if (item && item.type === 'text') {
+          item.fontWeight = (item.fontWeight === 'bold' || item.fontWeight >= 700) ? 'normal' : 'bold';
+          dom.btnTextBold.classList.toggle('active', item.fontWeight === 'bold');
+          renderSvgElement(item);
+          renderSelectionOverlay();
+          saveHistoryState();
+        }
+      });
+    }
+
+    if (dom.btnTextItalic) {
+      dom.btnTextItalic.addEventListener('click', () => {
+        const item = getSelectedElement();
+        if (item && item.type === 'text') {
+          item.fontStyle = item.fontStyle === 'italic' ? 'normal' : 'italic';
+          dom.btnTextItalic.classList.toggle('active', item.fontStyle === 'italic');
+          renderSvgElement(item);
+          renderSelectionOverlay();
+          saveHistoryState();
+        }
+      });
+    }
+
+    const setTextAlign = (align) => {
+      const item = getSelectedElement();
+      if (item && item.type === 'text') {
+        item.textAlign = align;
+        if (dom.btnAlignLeft) dom.btnAlignLeft.classList.toggle('active', align === 'left');
+        if (dom.btnAlignCenter) dom.btnAlignCenter.classList.toggle('active', align === 'center');
+        if (dom.btnAlignRight) dom.btnAlignRight.classList.toggle('active', align === 'right');
+        renderSvgElement(item);
+        renderSelectionOverlay();
+        saveHistoryState();
+      }
+    };
+
+    if (dom.btnAlignLeft) dom.btnAlignLeft.addEventListener('click', () => setTextAlign('left'));
+    if (dom.btnAlignCenter) dom.btnAlignCenter.addEventListener('click', () => setTextAlign('center'));
+    if (dom.btnAlignRight) dom.btnAlignRight.addEventListener('click', () => setTextAlign('right'));
+
+    // Mobile Inspector Drawer Functions
+    function openMobileInspector() {
+      if (dom.inspectorPanel) dom.inspectorPanel.classList.add('mobile-open');
+    }
+    function closeMobileInspector() {
+      if (dom.inspectorPanel) dom.inspectorPanel.classList.remove('mobile-open');
+    }
+    function toggleMobileInspector() {
+      if (dom.inspectorPanel) dom.inspectorPanel.classList.toggle('mobile-open');
+    }
+
+    if (dom.btnMobileInspector) dom.btnMobileInspector.addEventListener('click', toggleMobileInspector);
+    if (dom.btnMobileInspectorToggle) dom.btnMobileInspectorToggle.addEventListener('click', toggleMobileInspector);
+    if (dom.btnCloseInspector) dom.btnCloseInspector.addEventListener('click', closeMobileInspector);
+
+    // Mobile Menu Sheet Functions
+    function openMobileMenu() {
+      if (dom.mobileMenuSheet) {
+        if (dom.mobileDocTitle) dom.mobileDocTitle.value = dom.docTitle.value;
+        if (dom.mobileDocW) dom.mobileDocW.value = state.docWidth;
+        if (dom.mobileDocH) dom.mobileDocH.value = state.docHeight;
+        dom.mobileMenuSheet.classList.add('open');
+      }
+    }
+    function closeMobileMenu() {
+      if (dom.mobileMenuSheet) dom.mobileMenuSheet.classList.remove('open');
+    }
+
+    if (dom.btnMobileMenuToggle) dom.btnMobileMenuToggle.addEventListener('click', openMobileMenu);
+    if (dom.btnCloseMobileMenu) dom.btnCloseMobileMenu.addEventListener('click', closeMobileMenu);
+    if (dom.mobileSheetBackdrop) dom.mobileSheetBackdrop.addEventListener('click', closeMobileMenu);
+
+    if (dom.mobileDocTitle) {
+      dom.mobileDocTitle.addEventListener('input', (e) => { dom.docTitle.value = e.target.value; });
+    }
+    if (dom.mobileDocW) {
+      dom.mobileDocW.addEventListener('change', (e) => {
+        setDocumentDimensions(e.target.value, dom.mobileDocH ? dom.mobileDocH.value : 800);
+      });
+    }
+    if (dom.mobileDocH) {
+      dom.mobileDocH.addEventListener('change', (e) => {
+        setDocumentDimensions(dom.mobileDocW ? dom.mobileDocW.value : 1200, e.target.value);
+      });
+    }
+
+    if (dom.btnMobileExportSvg) {
+      dom.btnMobileExportSvg.addEventListener('click', () => {
+        closeMobileMenu();
+        exportSVG();
+      });
+    }
+    if (dom.btnMobileExportPng) {
+      dom.btnMobileExportPng.addEventListener('click', () => {
+        closeMobileMenu();
+        exportPNG();
+      });
+    }
+    if (dom.btnMobileSaveJson) {
+      dom.btnMobileSaveJson.addEventListener('click', () => {
+        closeMobileMenu();
+        saveProject();
+      });
+    }
+    if (dom.mobileFileInput) {
+      dom.mobileFileInput.addEventListener('change', (e) => {
+        if (e.target.files && e.target.files[0]) {
+          closeMobileMenu();
+          openFile(e.target.files[0]);
+        }
+      });
+    }
+    if (dom.btnMobileClear) {
+      dom.btnMobileClear.addEventListener('click', () => {
+        closeMobileMenu();
+        clearCanvas();
+      });
+    }
+
     // Keyboard Shortcuts
     window.addEventListener('keydown', (e) => {
       if (['input', 'textarea', 'select'].includes(document.activeElement.tagName.toLowerCase())) {
@@ -3148,6 +3542,7 @@
 
       // Hotkeys for Tools (CorelDRAW Style)
       if (e.key === 'v' || e.key === 'V') setTool('select');
+      if (e.key === 't' || e.key === 'T') setTool('text');
       if (e.key === 'b' || e.key === 'B') setTool('bezier');
       if (e.key === 'x' || e.key === 'X') setTool('connector-round');
       if (e.key === 'l' || e.key === 'L') setTool('line');
