@@ -2,12 +2,12 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>Vector Studio - Editor Vetorial & Exportador SVG</title>
   <link rel="stylesheet" href="style.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&family=Montserrat:wght@400;600;700;800&family=Pacifico&family=Playfair+Display:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
 </head>
 <body>
   <div id="app" class="app-container">
@@ -115,8 +115,70 @@
             <button id="btn-save-project">Salvar Projeto (.json)</button>
           </div>
         </div>
+        <!-- Mobile Quick Action Buttons -->
+        <button id="btn-mobile-inspector-toggle" class="btn-secondary btn-mobile-only" title="Alternar Painel de Propriedades">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          <span class="mobile-badge-indicator" id="mobile-selected-dot"></span>
+        </button>
+
+        <button id="btn-mobile-menu-toggle" class="btn-secondary btn-mobile-only" title="Menu e Documento">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+        </button>
       </div>
     </header>
+
+    <!-- Mobile Menu Modal (Settings, Dimensions, Save, Clear) -->
+    <div id="mobile-menu-sheet" class="mobile-sheet">
+      <div class="mobile-sheet-backdrop" id="mobile-sheet-backdrop"></div>
+      <div class="mobile-sheet-content">
+        <div class="mobile-sheet-header">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+            <h3>Menu & Documento</h3>
+          </div>
+          <button type="button" class="btn-close-sheet" id="btn-close-mobile-menu" aria-label="Fechar">✕</button>
+        </div>
+        <div class="mobile-sheet-body">
+          <div class="mobile-sheet-section">
+            <label class="mobile-sheet-label">Nome do Desenho</label>
+            <input type="text" id="mobile-doc-title" value="desenho_vetorial" class="mobile-text-input" />
+          </div>
+
+          <div class="mobile-sheet-section">
+            <label class="mobile-sheet-label">Tamanho do Documento (px)</label>
+            <div class="mobile-dim-row">
+              <input type="number" id="mobile-doc-w" value="1200" min="50" max="10000" step="10" />
+              <span style="color: var(--text-muted);">×</span>
+              <input type="number" id="mobile-doc-h" value="800" min="50" max="10000" step="10" />
+            </div>
+          </div>
+
+          <div class="mobile-sheet-section">
+            <label class="mobile-sheet-label">Predefinições Rápidas</label>
+            <div class="mobile-presets-grid">
+              <button type="button" class="doc-preset-btn" data-preset="1920x1080">1920×1080</button>
+              <button type="button" class="doc-preset-btn" data-preset="1080x1080">Quadrado</button>
+              <button type="button" class="doc-preset-btn" data-preset="1200x800">Padrão</button>
+              <button type="button" class="doc-preset-btn" data-preset="1240x1754">A4</button>
+            </div>
+          </div>
+
+          <div class="mobile-sheet-section mobile-actions-stack">
+            <button id="btn-mobile-export-svg" class="btn-primary" style="justify-content: center; width: 100%;">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Salvar Vetor SVG
+            </button>
+            <button id="btn-mobile-export-png" class="btn-secondary" style="justify-content: center; width: 100%;">Exportar Imagem PNG HD</button>
+            <button id="btn-mobile-save-json" class="btn-secondary" style="justify-content: center; width: 100%;">Salvar Projeto JSON</button>
+            <label class="btn-secondary" style="justify-content: center; width: 100%; cursor: pointer;">
+              Abrir Arquivo (.svg / .json)
+              <input type="file" id="mobile-file-input" accept=".svg,.json" style="display:none;" />
+            </label>
+            <button id="btn-mobile-clear" class="btn-secondary danger-text" style="justify-content: center; width: 100%;">Limpar Área de Desenho</button>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <!-- Main Workspace -->
     <div class="workspace">
@@ -144,6 +206,12 @@
         <button id="tool-polygon" class="tool-btn" data-tool="polygon" title="Polígono / Estrela (P)">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
           <span class="tool-tip">Polígono / Estrela (P)</span>
+        </button>
+
+        <!-- Texto Vetorial -->
+        <button id="tool-text" class="tool-btn" data-tool="text" title="Texto Vetorial (T)">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 7 4 4 20 4 20 7"></polyline><line x1="9" y1="20" x2="15" y2="20"></line><line x1="12" y1="4" x2="12" y2="20"></line></svg>
+          <span class="tool-tip">Texto (T)</span>
         </button>
 
         <div class="tool-separator"></div>
@@ -219,13 +287,22 @@
         <div class="canvas-info-badge">
           <span id="canvas-status">1200 x 800 px</span>
         </div>
+
+        <!-- Floating Mobile Properties Button -->
+        <button id="btn-mobile-inspector" class="mobile-floating-inspector-btn" title="Abrir Propriedades">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          <span id="mobile-inspector-btn-text">Propriedades</span>
+        </button>
       </main>
 
       <!-- Right: Inspector / Properties Panel -->
       <aside class="right-inspector" id="inspector-panel">
         <div class="panel-header">
-          <h3>Propriedades</h3>
-          <span id="selected-type-badge" class="element-badge">Nenhum objeto</span>
+          <div class="panel-header-title">
+            <h3>Propriedades</h3>
+            <span id="selected-type-badge" class="element-badge">Nenhum objeto</span>
+          </div>
+          <button type="button" id="btn-close-inspector" class="inspector-close-btn" title="Fechar Propriedades" aria-label="Fechar">✕</button>
         </div>
 
         <div class="panel-content" id="panel-content">
@@ -264,14 +341,81 @@
 
             <div class="shortcuts-hint" style="margin-top: 14px;">
               <small><b>Atalhos rápidos:</b></small>
-              <small><kbd>V</kbd> Selecionar | <kbd>R</kbd> Retângulo</small>
-              <small><kbd>C</kbd> Círculo | <kbd>L</kbd> Linha 2 Pontos</small>
-              <small><kbd>B</kbd> Bézier | <kbd>Del</kbd> Excluir</small>
+              <small><kbd>V</kbd> Selecionar | <kbd>T</kbd> Texto</small>
+              <small><kbd>R</kbd> Retângulo | <kbd>C</kbd> Círculo</small>
+              <small><kbd>L</kbd> Linha 2 Pontos | <kbd>B</kbd> Bézier</small>
             </div>
           </div>
 
           <!-- Active Properties (hidden when nothing selected) -->
           <div id="inspector-active" class="inspector-active" style="display: none;">
+
+            <!-- TEXT PROPERTIES (Visible only when text is selected) -->
+            <section class="prop-section text-properties-section" id="row-text-props" style="display: none;">
+              <div class="section-title">Texto Vetorial</div>
+              
+              <!-- Content textarea -->
+              <div class="form-row">
+                <label for="prop-text-content" style="font-size: 11px; color: var(--text-muted); font-weight: 500; margin-bottom: 4px; display: block;">Conteúdo do Texto:</label>
+                <textarea id="prop-text-content" rows="2" class="text-content-input" placeholder="Digite seu texto..."></textarea>
+              </div>
+
+              <!-- Font Family Selector with 5 free fonts -->
+              <div class="form-row">
+                <label for="prop-font-family" style="font-size: 11px; color: var(--text-muted); font-weight: 500; margin-bottom: 4px; display: block;">Fonte:</label>
+                <select id="prop-font-family" class="font-select">
+                  <option value="'Inter', sans-serif" style="font-family: 'Inter', sans-serif;">Inter (Moderna)</option>
+                  <option value="'Montserrat', sans-serif" style="font-family: 'Montserrat', sans-serif;">Montserrat (Geométrica / Títulos)</option>
+                  <option value="'Playfair Display', serif" style="font-family: 'Playfair Display', serif;">Playfair Display (Serifada Elegante)</option>
+                  <option value="'Pacifico', cursive" style="font-family: 'Pacifico', cursive;">Pacifico (Cursiva / Manuscrita)</option>
+                  <option value="'JetBrains Mono', monospace" style="font-family: 'JetBrains Mono', monospace;">JetBrains Mono (Código / Tech)</option>
+                </select>
+              </div>
+
+              <!-- Font Size & Quick buttons -->
+              <div class="form-row">
+                <div class="prop-header-with-value">
+                  <label for="prop-font-size-slider" style="font-size: 11px; color: var(--text-muted); font-weight: 500;">Tamanho da Fonte:</label>
+                  <div style="display: flex; align-items: center; gap: 4px;">
+                    <input type="number" id="prop-font-size-input" value="48" min="8" max="400" step="1" style="width: 54px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-main); font-size: 11px; border-radius: 4px; padding: 2px 4px; text-align: right;" />
+                    <span style="font-size: 11px; color: var(--text-muted);">px</span>
+                  </div>
+                </div>
+                <div class="slider-with-quick-buttons">
+                  <input type="range" id="prop-font-size-slider" min="12" max="180" value="48" step="1" />
+                  <div class="quick-corner-btns">
+                    <button type="button" class="btn-micro" id="btn-font-24">24px</button>
+                    <button type="button" class="btn-micro" id="btn-font-48">48px</button>
+                    <button type="button" class="btn-micro" id="btn-font-72">72px</button>
+                    <button type="button" class="btn-micro" id="btn-font-96">96px</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Weight, Style & Align Buttons -->
+              <div class="text-format-row">
+                <div class="btn-group text-format-group" title="Estilo de Texto">
+                  <button type="button" id="btn-text-bold" class="tool-btn-sm" title="Negrito (Bold)">
+                    <strong style="font-size: 14px;">B</strong>
+                  </button>
+                  <button type="button" id="btn-text-italic" class="tool-btn-sm" title="Itálico (Italic)">
+                    <em style="font-size: 14px; font-family: serif;">I</em>
+                  </button>
+                </div>
+
+                <div class="btn-group text-align-group" title="Alinhamento">
+                  <button type="button" id="btn-align-left" class="tool-btn-sm active" title="Alinhar à Esquerda">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="17" y1="10" x2="3" y2="10"/><line x1="21" y1="6" x2="3" y2="6"/><line x1="21" y1="14" x2="3" y2="14"/><line x1="17" y1="18" x2="3" y2="18"/></svg>
+                  </button>
+                  <button type="button" id="btn-align-center" class="tool-btn-sm" title="Centralizar">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="10" x2="6" y2="10"/><line x1="21" y1="6" x2="3" y2="6"/><line x1="21" y1="14" x2="3" y2="14"/><line x1="18" y1="18" x2="6" y2="18"/></svg>
+                  </button>
+                  <button type="button" id="btn-align-right" class="tool-btn-sm" title="Alinhar à Direita">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="21" y1="10" x2="7" y2="10"/><line x1="21" y1="6" x2="3" y2="6"/><line x1="21" y1="14" x2="3" y2="14"/><line x1="21" y1="18" x2="7" y2="18"/></svg>
+                  </button>
+                </div>
+              </div>
+            </section>
             
             <!-- SPECIAL ACTIONS: Converter Quadro em Círculo & Remover Pontas -->
             <section class="prop-section special-actions-section">
