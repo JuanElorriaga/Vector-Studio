@@ -1504,7 +1504,8 @@
     }
 
     newShape.strokeColor = dom.propStrokeColor ? dom.propStrokeColor.value : '#ec4899';
-    newShape.strokeWidth = dom.propStrokeWidth ? parseInt(dom.propStrokeWidth.value, 10) || 3 : 3;
+    const parsedSw = dom.propStrokeWidth ? parseFloat(dom.propStrokeWidth.value) : 3;
+    newShape.strokeWidth = !isNaN(parsedSw) && parsedSw > 0 ? parsedSw : 3;
 
     recalcBezierBounds(newShape);
     state.elements.set(newShape.id, newShape);
@@ -2330,7 +2331,7 @@
     // Stroke settings
     dom.propStrokeColor.value = item.strokeColor || '#ffffff';
     dom.propStrokeColorHex.value = item.strokeColor || '#ffffff';
-    dom.propStrokeWidth.value = item.hasStroke ? (item.strokeWidth || 2) : 0;
+    dom.propStrokeWidth.value = (item.hasStroke && item.strokeWidth !== undefined) ? item.strokeWidth : (item.hasStroke ? 2 : 0);
     dom.propStrokeDash.value = item.strokeDash || 'solid';
     dom.propStrokeCap.value = item.strokeCap || 'round';
     dom.btnToggleStroke.textContent = item.hasStroke ? 'Sem Traço' : 'Ativar Traço';
@@ -3955,12 +3956,30 @@
     dom.propStrokeWidth.addEventListener('input', (e) => {
       const item = getSelectedElement();
       if (item) {
-        item.strokeWidth = Math.max(0, parseInt(e.target.value, 10));
+        const val = parseFloat(e.target.value);
+        item.strokeWidth = !isNaN(val) ? Math.max(0, val) : 0;
         item.hasStroke = item.strokeWidth > 0;
         renderSvgElement(item);
       }
     });
     dom.propStrokeWidth.addEventListener('change', () => saveHistoryState());
+
+    document.querySelectorAll('.btn-stroke-quick').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const item = getSelectedElement();
+        if (item) {
+          const sw = parseFloat(btn.dataset.stroke);
+          if (!isNaN(sw)) {
+            item.strokeWidth = sw;
+            item.hasStroke = sw > 0;
+            dom.propStrokeWidth.value = sw;
+            renderSvgElement(item);
+            updateInspector();
+            saveHistoryState();
+          }
+        }
+      });
+    });
 
     dom.propStrokeDash.addEventListener('change', (e) => {
       const item = getSelectedElement();

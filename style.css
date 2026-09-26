@@ -1217,7 +1217,7 @@ body, html {
   color: var(--text-dim);
 }
 
-.opacity-box input, .stroke-width-box input {
+.opacity-box input {
   width: 38px;
   background: transparent;
   border: none;
@@ -1226,6 +1226,24 @@ body, html {
   font-size: 12px;
   text-align: right;
   outline: none;
+}
+
+.stroke-width-box input {
+  width: 46px;
+  background: transparent;
+  border: none;
+  color: var(--text-main);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  text-align: right;
+  outline: none;
+}
+
+.btn-stroke-quick {
+  flex: 1;
+  text-align: center;
+  padding: 3px 2px;
+  font-size: 11px;
 }
 
 .micro-label {

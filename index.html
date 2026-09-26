@@ -771,9 +771,18 @@
                 <input type="text" id="prop-stroke-color-hex" class="hex-text-input" value="#ffffff" />
                 <div class="stroke-width-box">
                   <span class="micro-label">Largura</span>
-                  <input type="number" id="prop-stroke-width" min="0" max="64" value="2" />
+                  <input type="number" id="prop-stroke-width" min="0" max="64" step="0.1" value="2" />
                   <span>px</span>
                 </div>
+              </div>
+
+              <div class="quick-stroke-btns" style="display: flex; gap: 4px; margin-top: 6px;">
+                <button type="button" class="btn-micro btn-stroke-quick" data-stroke="0.1" title="Contorno ultrafino 0.1px">0.1</button>
+                <button type="button" class="btn-micro btn-stroke-quick" data-stroke="0.5" title="Contorno fino 0.5px">0.5</button>
+                <button type="button" class="btn-micro btn-stroke-quick" data-stroke="1" title="Contorno padrão 1px">1</button>
+                <button type="button" class="btn-micro btn-stroke-quick" data-stroke="2" title="Contorno 2px">2</button>
+                <button type="button" class="btn-micro btn-stroke-quick" data-stroke="3" title="Contorno 3px">3</button>
+                <button type="button" class="btn-micro btn-stroke-quick" data-stroke="5" title="Contorno 5px">5</button>
               </div>
 
               <div class="stroke-styles-row">
