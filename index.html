@@ -116,12 +116,12 @@
           </div>
         </div>
         <!-- Mobile Quick Action Buttons -->
-        <button id="btn-mobile-inspector-toggle" class="btn-secondary btn-mobile-only" title="Alternar Painel de Propriedades">
+        <button id="btn-mobile-inspector-toggle" class="btn-secondary btn-mobile-only" title="Propriedades e Salvar (Menu)">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
           <span class="mobile-badge-indicator" id="mobile-selected-dot"></span>
         </button>
 
-        <button id="btn-mobile-menu-toggle" class="btn-secondary btn-mobile-only" title="Menu e Documento">
+        <button id="btn-mobile-menu-toggle" class="btn-secondary btn-mobile-only" title="Menu e Salvar Arquivo">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
         </button>
       </div>
@@ -306,8 +306,20 @@
         </div>
 
         <div class="panel-content" id="panel-content">
-          <!-- Empty State: Document Properties -->
+          <!-- Empty State: Document Properties & File Actions -->
           <div id="inspector-empty" class="inspector-empty">
+            <!-- 1. Nome do Documento -->
+            <div class="doc-settings-box">
+              <div class="doc-settings-title">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                Nome do Desenho
+              </div>
+              <div class="doc-settings-field">
+                <input type="text" id="side-doc-title" class="side-doc-title-input" value="desenho_vetorial" placeholder="Nome do arquivo..." title="Nome do arquivo para salvar" />
+              </div>
+            </div>
+
+            <!-- 2. Tamanho do Documento -->
             <div class="doc-settings-box">
               <div class="doc-settings-title">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
@@ -339,7 +351,46 @@
               </button>
             </div>
 
-            <div class="shortcuts-hint" style="margin-top: 14px;">
+            <!-- 3. Arquivo & Salvar (Incorporado do Menu Hamburguer) -->
+            <div class="doc-settings-box file-actions-box">
+              <div class="doc-settings-title" style="color: #34d399;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Salvar & Exportar
+              </div>
+
+              <div class="file-actions-vertical">
+                <button type="button" id="btn-side-export-svg" class="btn-primary" style="width: 100%; justify-content: center; padding: 10px; font-weight: 600;" title="Salvar arquivo vetorial SVG (compatível com CorelDraw e Illustrator)">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                  Salvar Vetor SVG
+                </button>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                  <button type="button" id="btn-side-export-png" class="btn-secondary" style="justify-content: center; font-size: 11px; padding: 8px 4px;" title="Exportar Imagem PNG em Alta Definição">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                    Imagem PNG
+                  </button>
+                  <button type="button" id="btn-side-save-json" class="btn-secondary" style="justify-content: center; font-size: 11px; padding: 8px 4px;" title="Salvar Projeto editável JSON">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                    Projeto JSON
+                  </button>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 2px;">
+                  <label class="btn-secondary" style="justify-content: center; font-size: 11px; padding: 8px 4px; cursor: pointer;" title="Abrir arquivo SVG ou Projeto JSON">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 22h14a2 2 0 0 0 2-2V7.5L14.5 2H6a2 2 0 0 0-2 2v4"/><polyline points="14 2 14 8 20 8"/><path d="M2 15h10"/><path d="M9 18l3-3-3-3"/></svg>
+                    Abrir Arquivo
+                    <input type="file" id="side-file-input" accept=".svg,.json" style="display:none;" />
+                  </label>
+                  <button type="button" id="btn-side-clear" class="btn-secondary danger-text" style="justify-content: center; font-size: 11px; padding: 8px 4px;" title="Limpar todo o desenho da tela">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                    Limpar Tela
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- 4. Atalhos rápidos -->
+            <div class="shortcuts-hint" style="margin-top: 10px;">
               <small><b>Atalhos rápidos:</b></small>
               <small><kbd>V</kbd> Selecionar | <kbd>T</kbd> Texto</small>
               <small><kbd>R</kbd> Retângulo | <kbd>C</kbd> Círculo</small>
@@ -764,6 +815,28 @@
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
                   Excluir
                 </button>
+              </div>
+            </section>
+
+            <!-- Seção de Salvar & Exportar no Painel Ativo -->
+            <section class="prop-section" id="active-file-actions-section" style="border-top: 1px solid var(--border-color); padding-top: 14px; margin-top: 8px;">
+              <div class="section-title" style="display:flex; align-items:center; gap:6px;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Salvar & Exportar
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 8px;">
+                <button type="button" id="btn-active-export-svg" class="btn-primary" style="width: 100%; justify-content: center; padding: 9px; font-weight: 600;" title="Salvar arquivo vetorial SVG (compatível com CorelDraw)">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                  Salvar Vetor SVG
+                </button>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                  <button type="button" id="btn-active-export-png" class="btn-secondary" style="justify-content: center; font-size: 11px; padding: 7px 4px;" title="Exportar Imagem PNG HD">
+                    PNG HD
+                  </button>
+                  <button type="button" id="btn-active-save-json" class="btn-secondary" style="justify-content: center; font-size: 11px; padding: 7px 4px;" title="Salvar Projeto JSON">
+                    Projeto JSON
+                  </button>
+                </div>
               </div>
             </section>
           </div>

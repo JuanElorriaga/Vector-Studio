@@ -62,6 +62,15 @@
     sideDocW: document.getElementById('side-doc-w'),
     sideDocH: document.getElementById('side-doc-h'),
     btnDocFit: document.getElementById('btn-doc-fit'),
+    sideDocTitle: document.getElementById('side-doc-title'),
+    btnSideExportSvg: document.getElementById('btn-side-export-svg'),
+    btnSideExportPng: document.getElementById('btn-side-export-png'),
+    btnSideSaveJson: document.getElementById('btn-side-save-json'),
+    sideFileInput: document.getElementById('side-file-input'),
+    btnSideClear: document.getElementById('btn-side-clear'),
+    btnActiveExportSvg: document.getElementById('btn-active-export-svg'),
+    btnActiveExportPng: document.getElementById('btn-active-export-png'),
+    btnActiveSaveJson: document.getElementById('btn-active-save-json'),
 
     // Inspector
     inspectorEmpty: document.getElementById('inspector-empty'),
@@ -252,9 +261,18 @@
     applyTransform();
   }
 
+  let lastRenderedZoom = 1;
   function applyTransform() {
     dom.wrapper.style.transform = `translate(${state.pan.x}px, ${state.pan.y}px) scale(${state.zoom})`;
+    dom.wrapper.style.setProperty('--canvas-zoom', state.zoom);
     dom.zoomValue.textContent = `${Math.round(state.zoom * 100)}%`;
+    if (Math.abs(lastRenderedZoom - state.zoom) > 0.001) {
+      lastRenderedZoom = state.zoom;
+      renderSelectionOverlay();
+      if (state.bezierDraft) {
+        renderBezierPreview();
+      }
+    }
   }
 
   function setDocumentDimensions(w, h, skipHistory = false) {
@@ -940,6 +958,8 @@
     const item = getSelectedElement();
     if (!item) return;
 
+    const z = Math.max(0.1, state.zoom);
+
     // Straight Line with Curvature
     if (item.type === 'line') {
       const lineG = document.createElementNS('http://www.w3.org/2000/svg', 'g');
@@ -967,7 +987,6 @@
       lineG.appendChild(createHandleCircle(item.x2, item.y2, 'line-p2', 'line-point-handle', 'Ponto Final'));
 
       const curveH = createHandleCircle(hx, hy, 'line-curve', 'curve-handle', 'Alça de Curvatura - Arraste para curvar!');
-      curveH.setAttribute('r', 7);
       lineG.appendChild(curveH);
 
       dom.selectionLayer.appendChild(lineG);
@@ -993,7 +1012,6 @@
       }
 
       const elbowH = createHandleCircle(ex, ey, 'conn-elbow', 'elbow-handle' + (isHoriz ? '' : ' vertical-move'), 'Alça de Dobra (Cotovelo) - Arraste para reposicionar');
-      elbowH.setAttribute('r', 7);
       connG.appendChild(elbowH);
 
       dom.selectionLayer.appendChild(connG);
@@ -1070,8 +1088,8 @@
         if (isActive && !pt.cp1 && !pt.cp2) {
           const curveBtn = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
           curveBtn.setAttribute('cx', pt.x);
-          curveBtn.setAttribute('cy', pt.y - 14);
-          curveBtn.setAttribute('r', 5);
+          curveBtn.setAttribute('cy', pt.y - 14 / z);
+          curveBtn.setAttribute('r', 5 / z);
           curveBtn.classList.add('bezier-pull-curve-btn');
           curveBtn.setAttribute('title', 'Clique para curvar e entornar as linhas deste ponto!');
           curveBtn.addEventListener('pointerdown', (e) => {
@@ -1148,16 +1166,17 @@
 
     const rotLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
     rotLine.setAttribute('x1', cx); rotLine.setAttribute('y1', y);
-    rotLine.setAttribute('x2', cx); rotLine.setAttribute('y2', y - 24);
+    rotLine.setAttribute('x2', cx); rotLine.setAttribute('y2', y - 24 / z);
     rotLine.classList.add('rotation-line');
     g.appendChild(rotLine);
 
-    g.appendChild(createHandleCircle(cx, y - 24, 'rotate', 'rotation-handle', 'Girar Forma'));
+    g.appendChild(createHandleCircle(cx, y - 24 / z, 'rotate', 'rotation-handle', 'Girar Forma'));
     dom.selectionLayer.appendChild(g);
   }
 
   function createHandleSquare(x, y, handleId, cursorClass) {
-    const size = 9;
+    const z = Math.max(0.1, state.zoom);
+    const size = 8 / z;
     const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
     rect.setAttribute('x', x - size / 2);
     rect.setAttribute('y', y - size / 2);
@@ -1187,10 +1206,13 @@
   }
 
   function createHandleCircle(cx, cy, handleId, extraClass, title = '') {
+    const z = Math.max(0.1, state.zoom);
+    const isLarger = extraClass && (extraClass.includes('curve-handle') || extraClass.includes('elbow-handle'));
+    const radius = (isLarger ? 6.5 : 5) / z;
     const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
     circle.setAttribute('cx', cx);
     circle.setAttribute('cy', cy);
-    circle.setAttribute('r', 6);
+    circle.setAttribute('r', radius);
     circle.setAttribute('data-handle', handleId);
     circle.classList.add('selection-handle');
     if (extraClass) {
@@ -1382,7 +1404,7 @@
         currentIndex: 0
       };
       renderBezierPreview();
-      showToast('Bézier: clique para adicionar nós. Para fechar a forma, clique no nó inicial ou dê Enter.');
+      showToast('Bézier: clique para adicionar nós. Dê Enter ou duplo clique para concluir.');
       return;
     }
 
@@ -1390,8 +1412,9 @@
     const first = points[0];
     const distToFirst = Math.hypot(pt.x - first.x, pt.y - first.y);
 
-    // Magnetic snap to first point to close and create geometric shape
-    if (points.length >= 3 && distToFirst < 30) {
+    // Close only when clicking precisely on the first node itself (screen pixel hit tolerance)
+    const hitRadius = 6 / Math.max(0.1, state.zoom);
+    if (points.length >= 3 && distToFirst <= hitRadius) {
       state.bezierDraft.closed = true;
       finishBezierDraft();
       return;
@@ -1428,59 +1451,36 @@
     dom.previewLayer.innerHTML = '';
     if (!state.bezierDraft) return;
 
+    const z = Math.max(0.1, state.zoom);
     const points = [...state.bezierDraft.points];
-    const first = points[0];
-    let isNearFirst = false;
 
     if (cursorPt && !state.bezierDraft.draggingTangent) {
-      const distToFirst = Math.hypot(cursorPt.x - first.x, cursorPt.y - first.y);
-      if (points.length >= 3 && distToFirst < 30) {
-        isNearFirst = true;
-        // Snap directly to first point
-        points.push({ x: first.x, y: first.y, cp1: null, cp2: null });
-      } else {
-        points.push({ x: cursorPt.x, y: cursorPt.y, cp1: null, cp2: null });
-      }
+      points.push({ x: cursorPt.x, y: cursorPt.y, cp1: null, cp2: null });
     }
 
-    const d = buildBezierPath(points, isNearFirst || state.bezierDraft.closed);
+    const d = buildBezierPath(points, state.bezierDraft.closed);
     const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
     path.setAttribute('d', d);
-    path.setAttribute('stroke', isNearFirst ? '#10b981' : '#06b6d4');
-    path.setAttribute('stroke-width', '2.5');
-    path.setAttribute('stroke-dasharray', '4 3');
-    path.setAttribute('fill', isNearFirst ? 'rgba(16, 185, 129, 0.15)' : 'none');
+    path.setAttribute('stroke', '#06b6d4');
+    path.setAttribute('stroke-width', (2 / z).toString());
+    path.setAttribute('stroke-dasharray', `${4 / z} ${3 / z}`);
+    path.setAttribute('fill', 'none');
     dom.previewLayer.appendChild(path);
 
-    // Render draft nodes
+    // Render draft nodes (responsive to zoom)
+    const nodeSize = 8 / z;
+    const halfNode = nodeSize / 2;
     state.bezierDraft.points.forEach((p, i) => {
       const nodeSquare = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-      nodeSquare.setAttribute('x', p.x - 4);
-      nodeSquare.setAttribute('y', p.y - 4);
-      nodeSquare.setAttribute('width', 8);
-      nodeSquare.setAttribute('height', 8);
-      nodeSquare.setAttribute('fill', i === 0 ? (isNearFirst ? '#10b981' : '#34d399') : '#ffffff');
+      nodeSquare.setAttribute('x', p.x - halfNode);
+      nodeSquare.setAttribute('y', p.y - halfNode);
+      nodeSquare.setAttribute('width', nodeSize);
+      nodeSquare.setAttribute('height', nodeSize);
+      nodeSquare.setAttribute('fill', i === 0 ? '#34d399' : '#ffffff');
       nodeSquare.setAttribute('stroke', '#06b6d4');
-      nodeSquare.setAttribute('stroke-width', '1.5');
+      nodeSquare.classList.add('selection-handle');
       dom.previewLayer.appendChild(nodeSquare);
     });
-
-    // Magnetic snap ring and text badge
-    if (isNearFirst) {
-      const snapRing = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-      snapRing.setAttribute('cx', first.x);
-      snapRing.setAttribute('cy', first.y);
-      snapRing.setAttribute('r', 16);
-      snapRing.classList.add('bezier-snap-ring');
-      dom.previewLayer.appendChild(snapRing);
-
-      const snapText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-      snapText.setAttribute('x', first.x);
-      snapText.setAttribute('y', first.y - 20);
-      snapText.classList.add('bezier-snap-label');
-      snapText.textContent = 'Clique para Ligar Pontos (Forma Geométrica)';
-      dom.previewLayer.appendChild(snapText);
-    }
   }
 
   function finishBezierDraft() {
@@ -1492,16 +1492,8 @@
     const newShape = createNewShape('bezier', 0, 0);
     newShape.points = state.bezierDraft.points;
 
-    // Check if points close upon themselves
-    const first = newShape.points[0];
-    const last = newShape.points[newShape.points.length - 1];
-    const distToFirst = Math.hypot(last.x - first.x, last.y - first.y);
-
-    if (state.bezierDraft.closed || (newShape.points.length >= 3 && distToFirst < 60)) {
+    if (state.bezierDraft.closed) {
       newShape.closed = true;
-      if (distToFirst < 40 && newShape.points.length > 3) {
-        newShape.points.pop();
-      }
       // Auto-initialize background fill color on closed geometric shape!
       newShape.fillType = 'solid';
       newShape.fillColor = dom.propFillColor ? dom.propFillColor.value : '#3b82f6';
@@ -2904,6 +2896,7 @@
             restoreHistoryState(data);
             if (data.title) dom.docTitle.value = data.title;
             else dom.docTitle.value = file.name.replace(/\.vector\.json$|\.json$/, '');
+            if (dom.sideDocTitle) dom.sideDocTitle.value = dom.docTitle.value;
             showToast('Projeto carregado com sucesso!');
           }
         } catch (err) {
@@ -3178,6 +3171,7 @@
 
     if (fileTitle && dom.docTitle) {
       dom.docTitle.value = fileTitle;
+      if (dom.sideDocTitle) dom.sideDocTitle.value = fileTitle;
     }
 
     cancelBezierDraft();
@@ -4088,27 +4082,96 @@
 
     // Mobile Inspector Drawer Functions
     function openMobileInspector() {
-      if (dom.inspectorPanel) dom.inspectorPanel.classList.add('mobile-open');
+      if (dom.inspectorPanel) {
+        if (dom.sideDocTitle && dom.docTitle) dom.sideDocTitle.value = dom.docTitle.value;
+        dom.inspectorPanel.classList.add('mobile-open');
+      }
     }
     function closeMobileInspector() {
       if (dom.inspectorPanel) dom.inspectorPanel.classList.remove('mobile-open');
     }
     function toggleMobileInspector() {
-      if (dom.inspectorPanel) dom.inspectorPanel.classList.toggle('mobile-open');
+      if (dom.inspectorPanel) {
+        if (dom.sideDocTitle && dom.docTitle) dom.sideDocTitle.value = dom.docTitle.value;
+        dom.inspectorPanel.classList.toggle('mobile-open');
+      }
     }
 
     if (dom.btnMobileInspector) dom.btnMobileInspector.addEventListener('click', toggleMobileInspector);
     if (dom.btnMobileInspectorToggle) dom.btnMobileInspectorToggle.addEventListener('click', toggleMobileInspector);
     if (dom.btnCloseInspector) dom.btnCloseInspector.addEventListener('click', closeMobileInspector);
 
-    // Mobile Menu Sheet Functions
+    // Sidebar Document Title sync with topbar and mobile
+    if (dom.sideDocTitle) {
+      dom.sideDocTitle.addEventListener('input', (e) => {
+        if (dom.docTitle) dom.docTitle.value = e.target.value;
+        if (dom.mobileDocTitle) dom.mobileDocTitle.value = e.target.value;
+      });
+    }
+    if (dom.docTitle) {
+      dom.docTitle.addEventListener('input', (e) => {
+        if (dom.sideDocTitle) dom.sideDocTitle.value = e.target.value;
+      });
+    }
+
+    // Sidebar / Properties Panel File Actions
+    if (dom.btnSideExportSvg) {
+      dom.btnSideExportSvg.addEventListener('click', () => {
+        closeMobileInspector();
+        exportSVG();
+      });
+    }
+    if (dom.btnSideExportPng) {
+      dom.btnSideExportPng.addEventListener('click', () => {
+        closeMobileInspector();
+        exportPNG();
+      });
+    }
+    if (dom.btnSideSaveJson) {
+      dom.btnSideSaveJson.addEventListener('click', () => {
+        closeMobileInspector();
+        saveProject();
+      });
+    }
+    if (dom.sideFileInput) {
+      dom.sideFileInput.addEventListener('change', (e) => {
+        if (e.target.files && e.target.files[0]) {
+          closeMobileInspector();
+          openFile(e.target.files[0]);
+        }
+      });
+    }
+    if (dom.btnSideClear) {
+      dom.btnSideClear.addEventListener('click', () => {
+        closeMobileInspector();
+        clearCanvas();
+      });
+    }
+
+    // Active Element Inspector Export Buttons
+    if (dom.btnActiveExportSvg) {
+      dom.btnActiveExportSvg.addEventListener('click', () => {
+        closeMobileInspector();
+        exportSVG();
+      });
+    }
+    if (dom.btnActiveExportPng) {
+      dom.btnActiveExportPng.addEventListener('click', () => {
+        closeMobileInspector();
+        exportPNG();
+      });
+    }
+    if (dom.btnActiveSaveJson) {
+      dom.btnActiveSaveJson.addEventListener('click', () => {
+        closeMobileInspector();
+        saveProject();
+      });
+    }
+
+    // Mobile Menu Sheet Functions (Also opens inspector or sheet)
     function openMobileMenu() {
-      if (dom.mobileMenuSheet) {
-        if (dom.mobileDocTitle) dom.mobileDocTitle.value = dom.docTitle.value;
-        if (dom.mobileDocW) dom.mobileDocW.value = state.docWidth;
-        if (dom.mobileDocH) dom.mobileDocH.value = state.docHeight;
-        dom.mobileMenuSheet.classList.add('open');
-      }
+      // Direct integration: opening menu also ensures properties drawer is available
+      toggleMobileInspector();
     }
     function closeMobileMenu() {
       if (dom.mobileMenuSheet) dom.mobileMenuSheet.classList.remove('open');
@@ -4119,7 +4182,10 @@
     if (dom.mobileSheetBackdrop) dom.mobileSheetBackdrop.addEventListener('click', closeMobileMenu);
 
     if (dom.mobileDocTitle) {
-      dom.mobileDocTitle.addEventListener('input', (e) => { dom.docTitle.value = e.target.value; });
+      dom.mobileDocTitle.addEventListener('input', (e) => { 
+        if (dom.docTitle) dom.docTitle.value = e.target.value; 
+        if (dom.sideDocTitle) dom.sideDocTitle.value = e.target.value;
+      });
     }
     if (dom.mobileDocW) {
       dom.mobileDocW.addEventListener('change', (e) => {

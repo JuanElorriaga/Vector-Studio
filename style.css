@@ -529,15 +529,17 @@ body, html {
 .selection-box {
   fill: none;
   stroke: #6366f1;
-  stroke-width: 1.5;
-  stroke-dasharray: 4 3;
+  stroke-width: calc(1.5px / var(--canvas-zoom, 1));
+  stroke-dasharray: calc(4px / var(--canvas-zoom, 1)) calc(3px / var(--canvas-zoom, 1));
+  vector-effect: non-scaling-stroke;
 }
 
 .selection-handle {
   fill: #ffffff;
   stroke: #4f46e5;
-  stroke-width: 1.5;
+  stroke-width: calc(1.5px / var(--canvas-zoom, 1));
   cursor: pointer;
+  vector-effect: non-scaling-stroke;
 }
 
 .handle-nw, .handle-se { cursor: nwse-resize; }
@@ -547,40 +549,34 @@ body, html {
 
 .rotation-line {
   stroke: #6366f1;
-  stroke-width: 1.5;
+  stroke-width: calc(1.5px / var(--canvas-zoom, 1));
+  vector-effect: non-scaling-stroke;
 }
 
 .rotation-handle {
   fill: #38bdf8;
   stroke: #0284c7;
-  stroke-width: 1.5;
+  stroke-width: calc(1.5px / var(--canvas-zoom, 1));
   cursor: grab;
+  vector-effect: non-scaling-stroke;
 }
 
 /* Line and Curve Handles */
 .line-point-handle {
   fill: #ec4899;
   stroke: #ffffff;
-  stroke-width: 2;
+  stroke-width: calc(2px / var(--canvas-zoom, 1));
   cursor: move;
-  transition: transform 0.1s ease;
-}
-
-.line-point-handle:hover {
-  transform: scale(1.25);
+  vector-effect: non-scaling-stroke;
 }
 
 .curve-handle {
   fill: #06b6d4;
   stroke: #ffffff;
-  stroke-width: 2;
+  stroke-width: calc(2px / var(--canvas-zoom, 1));
   cursor: grab;
-  filter: drop-shadow(0 2px 6px rgba(6, 182, 212, 0.8));
-  transition: transform 0.1s ease;
-}
-
-.curve-handle:hover {
-  transform: scale(1.25);
+  filter: drop-shadow(0 calc(2px / var(--canvas-zoom, 1)) calc(6px / var(--canvas-zoom, 1)) rgba(6, 182, 212, 0.8));
+  vector-effect: non-scaling-stroke;
 }
 
 .curve-handle:active {
@@ -589,23 +585,20 @@ body, html {
 
 .curve-tangent-line {
   stroke: #06b6d4;
-  stroke-width: 1.5;
-  stroke-dasharray: 4 3;
+  stroke-width: calc(1.5px / var(--canvas-zoom, 1));
+  stroke-dasharray: calc(4px / var(--canvas-zoom, 1)) calc(3px / var(--canvas-zoom, 1));
   opacity: 0.65;
+  vector-effect: non-scaling-stroke;
 }
 
 /* Right-Angle Round Connector Elbow Handle */
 .elbow-handle {
   fill: #f59e0b;
   stroke: #ffffff;
-  stroke-width: 2;
+  stroke-width: calc(2px / var(--canvas-zoom, 1));
   cursor: ew-resize;
-  filter: drop-shadow(0 2px 6px rgba(245, 158, 11, 0.8));
-  transition: transform 0.1s ease;
-}
-
-.elbow-handle:hover {
-  transform: scale(1.3);
+  filter: drop-shadow(0 calc(2px / var(--canvas-zoom, 1)) calc(6px / var(--canvas-zoom, 1)) rgba(245, 158, 11, 0.8));
+  vector-effect: non-scaling-stroke;
 }
 
 .elbow-handle.vertical-move {
@@ -616,28 +609,23 @@ body, html {
 .bezier-anchor-handle {
   fill: #ffffff;
   stroke: #6366f1;
-  stroke-width: 2;
+  stroke-width: calc(2px / var(--canvas-zoom, 1));
   cursor: move;
-  transition: transform 0.1s ease;
+  vector-effect: non-scaling-stroke;
 }
 
 .bezier-anchor-handle:hover,
 .bezier-anchor-handle.active {
   fill: #6366f1;
   stroke: #ffffff;
-  transform: scale(1.3);
 }
 
 .bezier-tangent-handle {
   fill: #06b6d4;
   stroke: #ffffff;
-  stroke-width: 1.5;
+  stroke-width: calc(1.5px / var(--canvas-zoom, 1));
   cursor: grab;
-  transition: transform 0.1s ease;
-}
-
-.bezier-tangent-handle:hover {
-  transform: scale(1.3);
+  vector-effect: non-scaling-stroke;
 }
 
 .bezier-tangent-handle:active {
@@ -646,34 +634,16 @@ body, html {
 
 .bezier-tangent-line {
   stroke: #06b6d4;
-  stroke-width: 1.2;
-  stroke-dasharray: 3 2;
+  stroke-width: calc(1.2px / var(--canvas-zoom, 1));
+  stroke-dasharray: calc(3px / var(--canvas-zoom, 1)) calc(2px / var(--canvas-zoom, 1));
   opacity: 0.8;
-}
-
-/* Bézier Magnetic Snap to Close Ring */
-.bezier-snap-ring {
-  fill: rgba(16, 185, 129, 0.35);
-  stroke: #10b981;
-  stroke-width: 2.5;
-  cursor: pointer;
-  pointer-events: auto;
-}
-
-.bezier-snap-label {
-  fill: #34d399;
-  font-size: 11px;
-  font-weight: 700;
-  font-family: var(--font-family);
-  text-anchor: middle;
-  pointer-events: none;
-  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.8));
+  vector-effect: non-scaling-stroke;
 }
 
 /* Bézier Direct Segment Curving Handles (CorelDRAW Style) */
 .bezier-segment-curve-handle {
   stroke: transparent;
-  stroke-width: 16;
+  stroke-width: calc(16px / var(--canvas-zoom, 1));
   fill: none;
   cursor: grab;
   pointer-events: stroke !important;
@@ -879,6 +849,37 @@ body, html {
   background: var(--bg-surface-hover);
   border-color: var(--accent-primary);
   color: #ffffff;
+}
+
+/* Sidebar Document Title Input & File Actions */
+.side-doc-title-input {
+  width: 100%;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  font-family: var(--font-family);
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  outline: none;
+  transition: all 0.15s ease;
+}
+
+.side-doc-title-input:focus {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+}
+
+.file-actions-box {
+  border-color: rgba(16, 185, 129, 0.22) !important;
+  background: linear-gradient(180deg, rgba(16, 185, 129, 0.04) 0%, rgba(255, 255, 255, 0.02) 100%);
+}
+
+.file-actions-vertical {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .inspector-empty svg {
@@ -1844,7 +1845,10 @@ input[type="range"]::-webkit-slider-thumb:hover {
 @media (max-width: 900px) {
   /* Topbar Adjustments */
   .topbar {
-    padding: 0 10px;
+    padding: 0 8px;
+    gap: 6px;
+    overflow-x: auto;
+    overflow-y: hidden;
   }
 
   .doc-title-wrapper,
@@ -1859,10 +1863,21 @@ input[type="range"]::-webkit-slider-thumb:hover {
   .btn-mobile-only {
     display: flex !important;
     position: relative;
+    flex-shrink: 0;
   }
 
   .topbar-center {
+    gap: 4px;
+    flex-shrink: 1;
+  }
+
+  #btn-zoom-fit {
+    display: none !important;
+  }
+
+  .topbar-right {
     gap: 6px;
+    flex-shrink: 0;
   }
 
   /* Left Toolbar: make buttons easily tappable */
@@ -1945,21 +1960,59 @@ input[type="range"]::-webkit-slider-thumb:hover {
   }
 }
 
-/* Small Cell Phones (< 550px) */
 @media (max-width: 550px) {
+  .topbar {
+    padding: 0 6px;
+    gap: 4px;
+  }
+
   .logo-text {
-    font-size: 14px;
+    font-size: 13px;
+  }
+
+  .topbar-center {
+    gap: 2px;
+  }
+
+  .btn-group {
+    padding: 1px;
+    gap: 1px;
+  }
+
+  .tool-btn-sm {
+    width: 28px;
+    height: 28px;
+  }
+
+  .tool-btn-sm svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  .zoom-controls {
+    gap: 1px;
+    padding: 1px 2px;
   }
 
   .zoom-text {
-    min-width: 36px;
-    font-size: 11px;
+    min-width: 32px;
+    font-size: 10px;
     padding: 1px 2px;
   }
 
   #btn-zoom-in,
   #btn-zoom-out {
-    padding: 4px;
+    padding: 2px;
+    width: 24px;
+    height: 26px;
+  }
+
+  .topbar-right {
+    gap: 4px;
+  }
+
+  .topbar-right .btn-secondary {
+    padding: 4px 8px;
   }
 
   .left-toolbar {
@@ -1981,7 +2034,7 @@ input[type="range"]::-webkit-slider-thumb:hover {
   }
 
   .right-inspector {
-    max-height: 78vh;
+    max-height: 82vh;
   }
 }
 
