@@ -14,10 +14,12 @@
     isPanning: false,
     panStart: { x: 0, y: 0 },
     spacePressed: false,
+    shiftPressed: false,
     gridVisible: true,
     snapToGrid: false,
     gridSize: 20,
     selectedId: null,
+    selectedIds: [],
     selectedNodeIndex: null, // For Bézier path node selection
     nextId: 1,
     colorTarget: 'fill', // 'fill' | 'stroke'
@@ -78,6 +80,9 @@
     selectedBadge: document.getElementById('selected-type-badge'),
 
     // Special Actions
+    rowMergeShapes: document.getElementById('row-merge-shapes'),
+    btnMergeShapes: document.getElementById('btn-merge-shapes'),
+    btnTopbarMerge: document.getElementById('btn-topbar-merge'),
     btnConvertShape: document.getElementById('btn-convert-shape'),
     btnConvertText: document.getElementById('btn-convert-text'),
     
@@ -549,8 +554,8 @@
     }
   }
 
-  // Build Bézier Path String from Node Points
-  function buildBezierPath(points, closed = false) {
+  // Build Single Bézier Path String from Node Points
+  function buildSingleBezierPath(points, closed = false) {
     if (!points || points.length === 0) return '';
     if (points.length === 1) return `M ${points[0].x} ${points[0].y}`;
 
@@ -585,6 +590,14 @@
     return d;
   }
 
+  // Build Bézier Path String from Node Points (Supports compound subpaths)
+  function buildBezierPath(points, closed = false, subpaths = null) {
+    if (subpaths && Array.isArray(subpaths) && subpaths.length > 0) {
+      return subpaths.map(sp => buildSingleBezierPath(sp.points, sp.closed !== undefined ? sp.closed : closed)).join(' ');
+    }
+    return buildSingleBezierPath(points, closed);
+  }
+
   // Recalculate line bounds and quadratic bezier curve
   function recalcLineBoundsAndCurve(item) {
     const mx = (item.x1 + item.x2) / 2;
@@ -615,9 +628,16 @@
   }
 
   function recalcBezierBounds(item) {
-    if (!item.points || item.points.length === 0) return;
+    let allPoints = item.points || [];
+    if (item.subpaths && Array.isArray(item.subpaths) && item.subpaths.length > 0) {
+      allPoints = [];
+      item.subpaths.forEach(sp => {
+        if (sp.points) allPoints.push(...sp.points);
+      });
+    }
+    if (allPoints.length === 0) return;
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    item.points.forEach(p => {
+    allPoints.forEach(p => {
       minX = Math.min(minX, p.x);
       minY = Math.min(minY, p.y);
       maxX = Math.max(maxX, p.x);
@@ -661,7 +681,14 @@
         group.addEventListener('pointerdown', (e) => {
           if (state.tool === 'select' && !state.spacePressed) {
             e.stopPropagation();
-            selectElement(data.id);
+            const isShift = e.shiftKey || state.shiftPressed;
+            if (isShift) {
+              toggleSelectElement(data.id);
+            } else {
+              if (!state.selectedIds.includes(data.id)) {
+                selectElement(data.id);
+              }
+            }
             startMoving(e);
           }
         });
@@ -678,7 +705,7 @@
         data.width = Math.max(1, Math.abs(data.x2 - data.x1));
         data.height = Math.max(1, Math.abs(data.y2 - data.y1));
       } else if (data.type === 'bezier') {
-        pathD = buildBezierPath(data.points, data.closed);
+        pathD = buildBezierPath(data.points, data.closed, data.subpaths);
         recalcBezierBounds(data);
       }
 
@@ -753,7 +780,14 @@
       el.addEventListener('pointerdown', (e) => {
         if (state.tool === 'select' && !state.spacePressed) {
           e.stopPropagation();
-          selectElement(data.id);
+          const isShift = e.shiftKey || state.shiftPressed;
+          if (isShift) {
+            toggleSelectElement(data.id);
+          } else {
+            if (!state.selectedIds.includes(data.id)) {
+              selectElement(data.id);
+            }
+          }
           startMoving(e);
         }
       });
@@ -932,33 +966,168 @@
   // SELECTION & TRANSFORMATION SYSTEM
   // =========================================================================
 
-  function selectElement(id) {
-    if (state.selectedId === id) return;
-    state.selectedId = id;
+  function selectElement(id, multi = false) {
+    if (!id || !state.elements.has(id)) return;
+    if (multi) {
+      if (!state.selectedIds.includes(id)) {
+        state.selectedIds.push(id);
+      }
+      state.selectedId = id;
+    } else {
+      state.selectedIds = [id];
+      state.selectedId = id;
+    }
+    state.selectedNodeIndex = null;
+    renderSelectionOverlay();
+    updateInspector();
+  }
+
+  function toggleSelectElement(id) {
+    if (!id || !state.elements.has(id)) return;
+    const idx = state.selectedIds.indexOf(id);
+    if (idx !== -1) {
+      state.selectedIds.splice(idx, 1);
+      state.selectedId = state.selectedIds.length > 0 ? state.selectedIds[state.selectedIds.length - 1] : null;
+    } else {
+      state.selectedIds.push(id);
+      state.selectedId = id;
+    }
     state.selectedNodeIndex = null;
     renderSelectionOverlay();
     updateInspector();
   }
 
   function clearSelection() {
-    if (state.selectedId !== null) {
-      state.selectedId = null;
-      state.selectedNodeIndex = null;
-      renderSelectionOverlay();
-      updateInspector();
+    state.selectedId = null;
+    state.selectedIds = [];
+    state.selectedNodeIndex = null;
+    renderSelectionOverlay();
+    updateInspector();
+  }
+
+  function selectAllElements() {
+    const allIds = Array.from(state.elements.keys());
+    if (allIds.length === 0) return;
+    state.selectedIds = [...allIds];
+    state.selectedId = allIds[allIds.length - 1];
+    state.selectedNodeIndex = null;
+    renderSelectionOverlay();
+    updateInspector();
+  }
+
+  function getSelectedElements() {
+    if (!state.selectedIds || state.selectedIds.length === 0) {
+      return state.selectedId && state.elements.has(state.selectedId) ? [state.elements.get(state.selectedId)] : [];
     }
+    return state.selectedIds.map(id => state.elements.get(id)).filter(Boolean);
   }
 
   function getSelectedElement() {
-    return state.selectedId ? state.elements.get(state.selectedId) : null;
+    if (state.selectedId && state.elements.has(state.selectedId)) {
+      return state.elements.get(state.selectedId);
+    }
+    const elems = getSelectedElements();
+    return elems.length > 0 ? elems[elems.length - 1] : null;
+  }
+
+  function renderMultiSelectionOverlay(items, z) {
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+
+    items.forEach(item => {
+      let ix = item.x, iy = item.y, iw = item.width, ih = item.height;
+      if (item.type === 'line' || item.type === 'connector-round') {
+        ix = Math.min(item.x1, item.x2);
+        iy = Math.min(item.y1, item.y2);
+        iw = Math.max(1, Math.abs(item.x2 - item.x1));
+        ih = Math.max(1, Math.abs(item.y2 - item.y1));
+      } else if (item.type === 'bezier') {
+        recalcBezierBounds(item);
+        ix = item.x;
+        iy = item.y;
+        iw = item.width;
+        ih = item.height;
+      }
+      minX = Math.min(minX, ix);
+      minY = Math.min(minY, iy);
+      maxX = Math.max(maxX, ix + iw);
+      maxY = Math.max(maxY, iy + ih);
+
+      const itemBox = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      itemBox.setAttribute('x', ix - 2 / z);
+      itemBox.setAttribute('y', iy - 2 / z);
+      itemBox.setAttribute('width', Math.max(2, iw + 4 / z));
+      itemBox.setAttribute('height', Math.max(2, ih + 4 / z));
+      itemBox.classList.add('selection-box-multi-item');
+      dom.selectionLayer.appendChild(itemBox);
+    });
+
+    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    const combRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    combRect.setAttribute('x', minX - 4 / z);
+    combRect.setAttribute('y', minY - 4 / z);
+    combRect.setAttribute('width', Math.max(2, maxX - minX + 8 / z));
+    combRect.setAttribute('height', Math.max(2, maxY - minY + 8 / z));
+    combRect.classList.add('selection-box');
+    g.appendChild(combRect);
+
+    const handleSize = 8 / z;
+    const halfH = handleSize / 2;
+    const corners = [
+      { x: minX - 4 / z, y: minY - 4 / z },
+      { x: maxX + 4 / z, y: minY - 4 / z },
+      { x: maxX + 4 / z, y: maxY + 4 / z },
+      { x: minX - 4 / z, y: maxY + 4 / z }
+    ];
+    corners.forEach(c => {
+      const hRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      hRect.setAttribute('x', c.x - halfH);
+      hRect.setAttribute('y', c.y - halfH);
+      hRect.setAttribute('width', handleSize);
+      hRect.setAttribute('height', handleSize);
+      hRect.classList.add('selection-handle');
+      g.appendChild(hRect);
+    });
+
+    const labelGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    const badgeText = `${items.length} objetos selecionados`;
+    const textWidth = badgeText.length * 6.5 / z + 12 / z;
+    const textHeight = 16 / z;
+    const labelBg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    labelBg.setAttribute('x', minX - 4 / z);
+    labelBg.setAttribute('y', minY - 24 / z);
+    labelBg.setAttribute('width', textWidth);
+    labelBg.setAttribute('height', textHeight);
+    labelBg.setAttribute('rx', 3 / z);
+    labelBg.setAttribute('fill', '#0284c7');
+    labelGroup.appendChild(labelBg);
+
+    const labelText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    labelText.setAttribute('x', minX - 4 / z + 6 / z);
+    labelText.setAttribute('y', minY - 12 / z);
+    labelText.setAttribute('fill', '#ffffff');
+    labelText.setAttribute('font-size', (10 / z).toString());
+    labelText.setAttribute('font-weight', '600');
+    labelText.setAttribute('font-family', 'sans-serif');
+    labelText.textContent = badgeText;
+    labelGroup.appendChild(labelText);
+
+    g.appendChild(labelGroup);
+    dom.selectionLayer.appendChild(g);
   }
 
   function renderSelectionOverlay() {
     dom.selectionLayer.innerHTML = '';
-    const item = getSelectedElement();
-    if (!item) return;
+    const items = getSelectedElements();
+    if (items.length === 0) return;
 
     const z = Math.max(0.1, state.zoom);
+
+    if (items.length > 1) {
+      renderMultiSelectionOverlay(items, z);
+      return;
+    }
+
+    const item = items[0];
 
     // Straight Line with Curvature
     if (item.type === 'line') {
@@ -1245,23 +1414,26 @@
   // =========================================================================
 
   function startMoving(e) {
-    const item = getSelectedElement();
-    if (!item) return;
+    const items = getSelectedElements();
+    if (items.length === 0) return;
 
     const startPos = clientToSvgCoords(e.clientX, e.clientY);
     state.transforming = {
       type: 'move',
       startX: startPos.x,
       startY: startPos.y,
-      origX: item.x,
-      origY: item.y,
-      origX1: item.x1,
-      origY1: item.y1,
-      origX2: item.x2,
-      origY2: item.y2,
-      origCx: item.cx,
-      origCy: item.cy,
-      origPoints: item.points ? JSON.parse(JSON.stringify(item.points)) : null
+      items: items.map(item => ({
+        item,
+        origX: item.x,
+        origY: item.y,
+        origX1: item.x1,
+        origY1: item.y1,
+        origX2: item.x2,
+        origY2: item.y2,
+        origCx: item.cx,
+        origCy: item.cy,
+        origPoints: item.points ? JSON.parse(JSON.stringify(item.points)) : null
+      }))
     };
   }
 
@@ -1526,6 +1698,565 @@
   function cancelBezierDraft() {
     state.bezierDraft = null;
     dom.previewLayer.innerHTML = '';
+  }
+
+  // =========================================================================
+  // MERGE (MESCLAR) OBJECTS SYSTEM
+  // =========================================================================
+
+  function dist(p1, p2) {
+    return Math.hypot(p1.x - p2.x, p1.y - p2.y);
+  }
+
+  function clonePoint(p) {
+    return {
+      x: p.x,
+      y: p.y,
+      cp1: p.cp1 ? { x: p.cp1.x, y: p.cp1.y } : null,
+      cp2: p.cp2 ? { x: p.cp2.x, y: p.cp2.y } : null,
+      smooth: !!p.smooth
+    };
+  }
+
+  function reverseBezierPoints(pts) {
+    const res = [];
+    for (let i = pts.length - 1; i >= 0; i--) {
+      const p = pts[i];
+      res.push({
+        x: p.x,
+        y: p.y,
+        cp1: p.cp2 ? { x: p.cp2.x, y: p.cp2.y } : null,
+        cp2: p.cp1 ? { x: p.cp1.x, y: p.cp1.y } : null,
+        smooth: !!p.smooth
+      });
+    }
+    return res;
+  }
+
+  function itemToBezier(item) {
+    if (!item) return null;
+    if (item.type === 'bezier') {
+      return {
+        points: JSON.parse(JSON.stringify(item.points || [])),
+        closed: !!item.closed,
+        subpaths: item.subpaths ? JSON.parse(JSON.stringify(item.subpaths)) : null,
+        fillType: item.fillType || 'solid',
+        fillColor: item.fillColor || '#3b82f6',
+        fillOpacity: item.fillOpacity !== undefined ? item.fillOpacity : 1,
+        strokeColor: item.strokeColor || '#ec4899',
+        strokeWidth: item.strokeWidth || 3,
+        strokeDash: item.strokeDash,
+        hasStroke: item.hasStroke !== false
+      };
+    }
+    if (item.type === 'line') {
+      let pts = [];
+      if (item.isCurved && item.cx !== undefined && item.cy !== undefined) {
+        const cp1x = item.x1 + (2 / 3) * (item.cx - item.x1);
+        const cp1y = item.y1 + (2 / 3) * (item.cy - item.y1);
+        const cp2x = item.x2 + (2 / 3) * (item.cx - item.x2);
+        const cp2y = item.y2 + (2 / 3) * (item.cy - item.y2);
+        pts = [
+          { x: item.x1, y: item.y1, cp1: null, cp2: { x: cp1x, y: cp1y }, smooth: true },
+          { x: item.x2, y: item.y2, cp1: { x: cp2x, y: cp2y }, cp2: null, smooth: true }
+        ];
+      } else {
+        pts = [
+          { x: item.x1, y: item.y1, cp1: null, cp2: null, smooth: false },
+          { x: item.x2, y: item.y2, cp1: null, cp2: null, smooth: false }
+        ];
+      }
+      return {
+        points: pts,
+        closed: false,
+        fillType: item.fillType || 'none',
+        fillColor: item.fillColor || '#3b82f6',
+        fillOpacity: 1,
+        strokeColor: item.strokeColor || '#ec4899',
+        strokeWidth: item.strokeWidth || 3,
+        strokeDash: item.strokeDash,
+        hasStroke: true
+      };
+    }
+    if (item.type === 'connector-round') {
+      const d = buildRoundConnectorPath(item);
+      const parsed = parseSvgPathD(d);
+      return {
+        points: parsed.points,
+        closed: false,
+        fillType: 'none',
+        fillColor: '#3b82f6',
+        fillOpacity: 1,
+        strokeColor: item.strokeColor || '#f59e0b',
+        strokeWidth: item.strokeWidth || 3,
+        strokeDash: item.strokeDash,
+        hasStroke: true
+      };
+    }
+    if (item.type === 'rect') {
+      const x = item.x, y = item.y, w = item.width, h = item.height;
+      const pts = [
+        { x: x, y: y, cp1: null, cp2: null, smooth: false },
+        { x: x + w, y: y, cp1: null, cp2: null, smooth: false },
+        { x: x + w, y: y + h, cp1: null, cp2: null, smooth: false },
+        { x: x, y: y + h, cp1: null, cp2: null, smooth: false }
+      ];
+      return {
+        points: pts,
+        closed: true,
+        fillType: item.fillType || 'solid',
+        fillColor: item.fillColor || '#3b82f6',
+        fillOpacity: item.fillOpacity !== undefined ? item.fillOpacity : 1,
+        strokeColor: item.strokeColor || '#ec4899',
+        strokeWidth: item.strokeWidth || 3,
+        strokeDash: item.strokeDash,
+        hasStroke: item.hasStroke !== false
+      };
+    }
+    if (item.type === 'circle') {
+      const cx = item.x + item.width / 2;
+      const cy = item.y + item.height / 2;
+      const rx = item.width / 2;
+      const ry = item.height / 2;
+      const kx = rx * 0.5522847498;
+      const ky = ry * 0.5522847498;
+      const pts = [
+        { x: cx, y: cy - ry, cp1: { x: cx - kx, y: cy - ry }, cp2: { x: cx + kx, y: cy - ry }, smooth: true },
+        { x: cx + rx, y: cy, cp1: { x: cx + rx, y: cy - ky }, cp2: { x: cx + rx, y: cy + ky }, smooth: true },
+        { x: cx, y: cy + ry, cp1: { x: cx + kx, y: cy + ry }, cp2: { x: cx - kx, y: cy + ry }, smooth: true },
+        { x: cx - rx, y: cy, cp1: { x: cx - rx, y: cy + ky }, cp2: { x: cx - rx, y: cy - ky }, smooth: true }
+      ];
+      return {
+        points: pts,
+        closed: true,
+        fillType: item.fillType || 'solid',
+        fillColor: item.fillColor || '#3b82f6',
+        fillOpacity: item.fillOpacity !== undefined ? item.fillOpacity : 1,
+        strokeColor: item.strokeColor || '#ec4899',
+        strokeWidth: item.strokeWidth || 3,
+        strokeDash: item.strokeDash,
+        hasStroke: item.hasStroke !== false
+      };
+    }
+    if (item.type === 'polygon') {
+      const cx = item.x + item.width / 2;
+      const cy = item.y + item.height / 2;
+      const rx = item.width / 2;
+      const ry = item.height / 2;
+      const sides = Math.max(3, item.polyPoints || 5);
+      const pts = [];
+      for (let i = 0; i < sides; i++) {
+        const angle = (i * 2 * Math.PI / sides) - Math.PI / 2;
+        pts.push({
+          x: cx + rx * Math.cos(angle),
+          y: cy + ry * Math.sin(angle),
+          cp1: null, cp2: null, smooth: false
+        });
+      }
+      return {
+        points: pts,
+        closed: true,
+        fillType: item.fillType || 'solid',
+        fillColor: item.fillColor || '#3b82f6',
+        fillOpacity: item.fillOpacity !== undefined ? item.fillOpacity : 1,
+        strokeColor: item.strokeColor || '#ec4899',
+        strokeWidth: item.strokeWidth || 3,
+        strokeDash: item.strokeDash,
+        hasStroke: item.hasStroke !== false
+      };
+    }
+    return null;
+  }
+
+  function tryMergeSharedEdge(ptsA, ptsB, tol = 35) {
+    if (!ptsA || ptsA.length < 2 || !ptsB || ptsB.length < 2) return null;
+    const N = ptsA.length;
+    const M = ptsB.length;
+
+    for (let i = 0; i < N; i++) {
+      const nextI = (i + 1) % N;
+      const pA1 = ptsA[i];
+      const pA2 = ptsA[nextI];
+
+      for (let j = 0; j < M; j++) {
+        const nextJ = (j + 1) % M;
+        const pB1 = ptsB[j];
+        const pB2 = ptsB[nextJ];
+
+        // Case 1: Opposite directions (pA1 ~ pB2, pA2 ~ pB1)
+        if (dist(pA1, pB2) <= tol && dist(pA2, pB1) <= tol) {
+          const merged = [];
+
+          let curr = nextI;
+          while (true) {
+            merged.push(clonePoint(ptsA[curr]));
+            if (curr === i) break;
+            curr = (curr + 1) % N;
+          }
+
+          curr = nextJ;
+          const bPoints = [];
+          while (true) {
+            bPoints.push(clonePoint(ptsB[curr]));
+            if (curr === j) break;
+            curr = (curr + 1) % M;
+          }
+
+          if (bPoints.length > 0 && bPoints[0].cp2 && !merged[merged.length - 1].cp2) {
+            merged[merged.length - 1].cp2 = bPoints[0].cp2;
+          }
+
+          for (let k = 1; k < bPoints.length - 1; k++) {
+            merged.push(bPoints[k]);
+          }
+
+          if (bPoints.length > 1) {
+            const lastB = bPoints[bPoints.length - 1];
+            if (lastB.cp1 && !merged[0].cp1) {
+              merged[0].cp1 = lastB.cp1;
+            }
+          }
+
+          return merged;
+        }
+
+        // Case 2: Same direction (pA1 ~ pB1, pA2 ~ pB2) -> reverse B
+        if (dist(pA1, pB1) <= tol && dist(pA2, pB2) <= tol) {
+          const revB = reverseBezierPoints(ptsB);
+          return tryMergeSharedEdge(ptsA, revB, tol);
+        }
+      }
+    }
+    return null;
+  }
+
+  function joinOpenPaths(bA, bB, tol = 45) {
+    let ptsA = bA.points.map(clonePoint);
+    let ptsB = bB.points.map(clonePoint);
+
+    const aStart = ptsA[0];
+    const aEnd = ptsA[ptsA.length - 1];
+    const bStart = ptsB[0];
+    const bEnd = ptsB[ptsB.length - 1];
+
+    const dEndStart = dist(aEnd, bStart);
+    const dEndEnd   = dist(aEnd, bEnd);
+    const dStartStart = dist(aStart, bStart);
+    const dStartEnd = dist(aStart, bEnd);
+
+    const minDist = Math.min(dEndStart, dEndEnd, dStartStart, dStartEnd);
+
+    if (minDist === dEndEnd) {
+      ptsB = reverseBezierPoints(ptsB);
+    } else if (minDist === dStartStart) {
+      ptsA = reverseBezierPoints(ptsA);
+    } else if (minDist === dStartEnd) {
+      const temp = ptsA;
+      ptsA = ptsB;
+      ptsB = temp;
+    }
+
+    const lastA = ptsA[ptsA.length - 1];
+    const firstB = ptsB[0];
+
+    let mergedPoints = [];
+    if (dist(lastA, firstB) <= tol) {
+      const mergedNode = {
+        x: (lastA.x + firstB.x) / 2,
+        y: (lastA.y + firstB.y) / 2,
+        cp1: lastA.cp1,
+        cp2: firstB.cp2,
+        smooth: lastA.smooth || firstB.smooth
+      };
+      mergedPoints = [...ptsA.slice(0, -1), mergedNode, ...ptsB.slice(1)];
+    } else {
+      mergedPoints = [...ptsA, ...ptsB];
+    }
+
+    const newStart = mergedPoints[0];
+    const newEnd = mergedPoints[mergedPoints.length - 1];
+    let closed = false;
+
+    if (dist(newStart, newEnd) <= tol && mergedPoints.length >= 3) {
+      closed = true;
+      const closingNode = {
+        x: (newStart.x + newEnd.x) / 2,
+        y: (newStart.y + newEnd.y) / 2,
+        cp1: newEnd.cp1,
+        cp2: newStart.cp2,
+        smooth: newStart.smooth || newEnd.smooth
+      };
+      mergedPoints[0] = closingNode;
+      mergedPoints.pop();
+    }
+
+    return { points: mergedPoints, closed };
+  }
+
+  function sampleBezierToPolygon(points, closed, samplesPerSeg = 24) {
+    if (!points || points.length === 0) return [];
+    const poly = [];
+    const num = points.length;
+    const count = closed ? num : num - 1;
+
+    for (let i = 0; i < count; i++) {
+      const p1 = points[i];
+      const p2 = points[(i + 1) % num];
+      const cp1 = p1.cp2 || { x: p1.x, y: p1.y };
+      const cp2 = p2.cp1 || { x: p2.x, y: p2.y };
+      const hasCurves = p1.cp2 || p2.cp1;
+
+      if (!hasCurves) {
+        poly.push({ x: p1.x, y: p1.y });
+      } else {
+        for (let s = 0; s < samplesPerSeg; s++) {
+          const t = s / samplesPerSeg;
+          const u = 1 - t;
+          const x = u*u*u*p1.x + 3*u*u*t*cp1.x + 3*u*t*t*cp2.x + t*t*t*p2.x;
+          const y = u*u*u*p1.y + 3*u*u*t*cp1.y + 3*u*t*t*cp2.y + t*t*t*p2.y;
+          poly.push({ x, y });
+        }
+      }
+    }
+    return poly;
+  }
+
+  function pointInPoly(pt, poly) {
+    let inside = false;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const xi = poly[i].x, yi = poly[i].y;
+      const xj = poly[j].x, yj = poly[j].y;
+      const intersect = ((yi > pt.y) !== (yj > pt.y)) &&
+        (pt.x < (xj - xi) * (pt.y - yi) / (yj - yi + 1e-10) + xi);
+      if (intersect) inside = !inside;
+    }
+    return inside;
+  }
+
+  function segIntersection(p1, p2, p3, p4) {
+    const d = (p2.x - p1.x) * (p4.y - p3.y) - (p2.y - p1.y) * (p4.x - p3.x);
+    if (Math.abs(d) < 1e-7) return null;
+    const t = ((p3.x - p1.x) * (p4.y - p3.y) - (p3.y - p1.y) * (p4.x - p3.x)) / d;
+    const u = ((p3.x - p1.x) * (p2.y - p1.y) - (p3.y - p1.y) * (p2.x - p1.x)) / d;
+    if (t > 1e-4 && t < 1 - 1e-4 && u > 1e-4 && u < 1 - 1e-4) {
+      return {
+        x: p1.x + t * (p2.x - p1.x),
+        y: p1.y + t * (p2.y - p1.y),
+        t, u
+      };
+    }
+    return null;
+  }
+
+  function simplifyPoly(points, epsilon = 2.5) {
+    if (points.length <= 4) return points;
+
+    function getSqSegDist(p, p1, p2) {
+      let x = p1.x, y = p1.y, dx = p2.x - x, dy = p2.y - y;
+      if (dx !== 0 || dy !== 0) {
+        const t = ((p.x - x) * dx + (p.y - y) * dy) / (dx * dx + dy * dy);
+        if (t > 1) { x = p2.x; y = p2.y; }
+        else if (t > 0) { x += dx * t; y += dy * t; }
+      }
+      dx = p.x - x; dy = p.y - y;
+      return dx * dx + dy * dy;
+    }
+
+    function rdp(pts, sqEps) {
+      let maxSqDist = 0;
+      let index = 0;
+      for (let i = 1; i < pts.length - 1; i++) {
+        const sqDist = getSqSegDist(pts[i], pts[0], pts[pts.length - 1]);
+        if (sqDist > maxSqDist) {
+          index = i;
+          maxSqDist = sqDist;
+        }
+      }
+      if (maxSqDist > sqEps) {
+        const left = rdp(pts.slice(0, index + 1), sqEps);
+        const right = rdp(pts.slice(index), sqEps);
+        return left.slice(0, -1).concat(right);
+      }
+      return [pts[0], pts[pts.length - 1]];
+    }
+
+    return rdp(points, epsilon * epsilon);
+  }
+
+  function tryPolygonUnion(bA, bB) {
+    const polyA = sampleBezierToPolygon(bA.points, bA.closed, 20);
+    const polyB = sampleBezierToPolygon(bB.points, bB.closed, 20);
+    if (polyA.length < 3 || polyB.length < 3) return null;
+
+    const edgesA = [];
+    for (let i = 0; i < polyA.length; i++) {
+      const p1 = polyA[i];
+      const p2 = polyA[(i + 1) % polyA.length];
+      const inters = [];
+      for (let j = 0; j < polyB.length; j++) {
+        const p3 = polyB[j];
+        const p4 = polyB[(j + 1) % polyB.length];
+        const hit = segIntersection(p1, p2, p3, p4);
+        if (hit) inters.push(hit);
+      }
+      inters.sort((a, b) => a.t - b.t);
+      let lastPt = p1;
+      inters.forEach(hit => {
+        edgesA.push({ p1: lastPt, p2: { x: hit.x, y: hit.y } });
+        lastPt = { x: hit.x, y: hit.y };
+      });
+      edgesA.push({ p1: lastPt, p2 });
+    }
+
+    const edgesB = [];
+    for (let i = 0; i < polyB.length; i++) {
+      const p1 = polyB[i];
+      const p2 = polyB[(i + 1) % polyB.length];
+      const inters = [];
+      for (let j = 0; j < polyA.length; j++) {
+        const p3 = polyA[j];
+        const p4 = polyA[(j + 1) % polyA.length];
+        const hit = segIntersection(p1, p2, p3, p4);
+        if (hit) inters.push(hit);
+      }
+      inters.sort((a, b) => a.t - b.t);
+      let lastPt = p1;
+      inters.forEach(hit => {
+        edgesB.push({ p1: lastPt, p2: { x: hit.x, y: hit.y } });
+        lastPt = { x: hit.x, y: hit.y };
+      });
+      edgesB.push({ p1: lastPt, p2 });
+    }
+
+    const keptEdges = [];
+    edgesA.forEach(e => {
+      const mid = { x: (e.p1.x + e.p2.x) / 2, y: (e.p1.y + e.p2.y) / 2 };
+      if (!pointInPoly(mid, polyB)) keptEdges.push(e);
+    });
+
+    edgesB.forEach(e => {
+      const mid = { x: (e.p1.x + e.p2.x) / 2, y: (e.p1.y + e.p2.y) / 2 };
+      if (!pointInPoly(mid, polyA)) keptEdges.push(e);
+    });
+
+    if (keptEdges.length < 3) return null;
+
+    const loop = [keptEdges[0].p1, keptEdges[0].p2];
+    keptEdges.splice(0, 1);
+
+    while (keptEdges.length > 0) {
+      const tail = loop[loop.length - 1];
+      let bestIdx = -1;
+      let bestDist = Infinity;
+      for (let k = 0; k < keptEdges.length; k++) {
+        const d = dist(tail, keptEdges[k].p1);
+        if (d < bestDist) {
+          bestDist = d;
+          bestIdx = k;
+        }
+      }
+
+      if (bestDist < 15) {
+        loop.push(keptEdges[bestIdx].p2);
+        keptEdges.splice(bestIdx, 1);
+      } else {
+        break;
+      }
+    }
+
+    if (loop.length < 3) return null;
+
+    const simplified = simplifyPoly(loop, 2.0);
+    return simplified.map(p => ({
+      x: Math.round(p.x * 10) / 10,
+      y: Math.round(p.y * 10) / 10,
+      cp1: null,
+      cp2: null,
+      smooth: false
+    }));
+  }
+
+  function mergeTwoElements(elemA, elemB) {
+    const bA = itemToBezier(elemA);
+    const bB = itemToBezier(elemB);
+    if (!bA || !bB) return null;
+
+    let mergedResult = null;
+
+    if (!bA.closed && !bB.closed) {
+      mergedResult = joinOpenPaths(bA, bB);
+    } else {
+      const sharedPoints = tryMergeSharedEdge(bA.points, bB.points);
+      if (sharedPoints && sharedPoints.length >= 3) {
+        mergedResult = { points: sharedPoints, closed: true };
+      } else {
+        const unionPoints = tryPolygonUnion(bA, bB);
+        if (unionPoints && unionPoints.length >= 3) {
+          mergedResult = { points: unionPoints, closed: true };
+        } else {
+          mergedResult = {
+            points: [...bA.points, ...bB.points],
+            closed: bA.closed || bB.closed,
+            subpaths: [
+              { points: bA.points, closed: bA.closed },
+              { points: bB.points, closed: bB.closed }
+            ]
+          };
+        }
+      }
+    }
+
+    const mergedShape = createNewShape('bezier', 0, 0);
+    mergedShape.points = mergedResult.points;
+    mergedShape.closed = mergedResult.closed;
+    if (mergedResult.subpaths) {
+      mergedShape.subpaths = mergedResult.subpaths;
+    }
+
+    mergedShape.fillType = (bA.fillType && bA.fillType !== 'none') ? bA.fillType : ((bB.fillType && bB.fillType !== 'none') ? bB.fillType : (mergedShape.closed ? 'solid' : 'none'));
+    mergedShape.fillColor = bA.fillColor || bB.fillColor || '#3b82f6';
+    mergedShape.fillOpacity = bA.fillOpacity !== undefined ? bA.fillOpacity : 1;
+    mergedShape.strokeColor = bA.strokeColor || bB.strokeColor || '#ec4899';
+    mergedShape.strokeWidth = bA.strokeWidth || bB.strokeWidth || 3;
+    mergedShape.strokeDash = bA.strokeDash || bB.strokeDash;
+    mergedShape.hasStroke = bA.hasStroke !== false;
+
+    recalcBezierBounds(mergedShape);
+    return mergedShape;
+  }
+
+  function mergeSelectedElements() {
+    const items = getSelectedElements();
+    if (items.length < 2) {
+      showToast('Selecione 2 objetos (segure Shift e clique neles) para mesclar.');
+      return;
+    }
+
+    let current = items[0];
+    for (let i = 1; i < items.length; i++) {
+      const merged = mergeTwoElements(current, items[i]);
+      if (!merged) {
+        showToast('Não foi possível mesclar estes objetos.');
+        return;
+      }
+      current = merged;
+    }
+
+    items.forEach(it => {
+      const el = document.getElementById(it.id);
+      if (el) el.remove();
+      if (it.gradient) {
+        const gDef = document.getElementById(it.gradient.id);
+        if (gDef) gDef.remove();
+      }
+      state.elements.delete(it.id);
+    });
+
+    state.elements.set(current.id, current);
+    renderSvgElement(current);
+    selectElement(current.id);
+    saveHistoryState();
+    showToast('Objetos mesclados em um único objeto com sucesso!');
   }
 
   // =========================================================================
@@ -1800,7 +2531,9 @@
     // Select Tool
     if (state.tool === 'select') {
       if (e.target === dom.svg || e.target.id === 'canvas-bg' || e.target.id === 'canvas-grid') {
-        clearSelection();
+        if (!e.shiftKey && !state.shiftPressed && !e.ctrlKey && !e.metaKey) {
+          clearSelection();
+        }
       }
       return;
     }
@@ -1921,31 +2654,51 @@
     if (t.type === 'move') {
       const dx = pt.x - t.startX;
       const dy = pt.y - t.startY;
+      const moveList = t.items && t.items.length > 0 ? t.items : [{
+        item,
+        origX: t.origX, origY: t.origY,
+        origX1: t.origX1, origY1: t.origY1,
+        origX2: t.origX2, origY2: t.origY2,
+        origCx: t.origCx, origCy: t.origCy,
+        origPoints: t.origPoints
+      }];
 
-      if (item.type === 'line' || item.type === 'connector-round') {
-        item.x1 = t.origX1 + dx;
-        item.y1 = t.origY1 + dy;
-        item.x2 = t.origX2 + dx;
-        item.y2 = t.origY2 + dy;
-        if (item.cx !== undefined) item.cx = t.origCx + dx;
-        if (item.cy !== undefined) item.cy = t.origCy + dy;
-        item.x = Math.min(item.x1, item.x2);
-        item.y = Math.min(item.y1, item.y2);
-        item.width = Math.max(1, Math.abs(item.x2 - item.x1));
-        item.height = Math.max(1, Math.abs(item.y2 - item.y1));
-      } else if (item.type === 'bezier') {
-        item.points.forEach((p, idx) => {
-          const orig = t.origPoints[idx];
-          p.x = orig.x + dx;
-          p.y = orig.y + dy;
-          if (p.cp1) { p.cp1.x = orig.cp1.x + dx; p.cp1.y = orig.cp1.y + dy; }
-          if (p.cp2) { p.cp2.x = orig.cp2.x + dx; p.cp2.y = orig.cp2.y + dy; }
-        });
-        recalcBezierBounds(item);
-      } else {
-        item.x = t.origX + dx;
-        item.y = t.origY + dy;
-      }
+      moveList.forEach(entry => {
+        const curItem = entry.item;
+        if (!curItem) return;
+        if (curItem.type === 'line' || curItem.type === 'connector-round') {
+          curItem.x1 = entry.origX1 + dx;
+          curItem.y1 = entry.origY1 + dy;
+          curItem.x2 = entry.origX2 + dx;
+          curItem.y2 = entry.origY2 + dy;
+          if (curItem.cx !== undefined && entry.origCx !== undefined) curItem.cx = entry.origCx + dx;
+          if (curItem.cy !== undefined && entry.origCy !== undefined) curItem.cy = entry.origCy + dy;
+          curItem.x = Math.min(curItem.x1, curItem.x2);
+          curItem.y = Math.min(curItem.y1, curItem.y2);
+          curItem.width = Math.max(1, Math.abs(curItem.x2 - curItem.x1));
+          curItem.height = Math.max(1, Math.abs(curItem.y2 - curItem.y1));
+        } else if (curItem.type === 'bezier') {
+          if (curItem.points && entry.origPoints) {
+            curItem.points.forEach((p, idx) => {
+              const orig = entry.origPoints[idx];
+              if (orig) {
+                p.x = orig.x + dx;
+                p.y = orig.y + dy;
+                if (p.cp1 && orig.cp1) { p.cp1.x = orig.cp1.x + dx; p.cp1.y = orig.cp1.y + dy; }
+                if (p.cp2 && orig.cp2) { p.cp2.x = orig.cp2.x + dx; p.cp2.y = orig.cp2.y + dy; }
+              }
+            });
+          }
+          recalcBezierBounds(curItem);
+        } else {
+          curItem.x = entry.origX + dx;
+          curItem.y = entry.origY + dy;
+        }
+        renderSvgElement(curItem);
+      });
+      renderSelectionOverlay();
+      updateInspector();
+      return;
     } else if (t.type === 'resize') {
       let dx = pt.x - t.startX;
       let dy = pt.y - t.startY;
@@ -2140,15 +2893,18 @@
   // =========================================================================
 
   function updateInspector() {
+    const items = getSelectedElements();
     const item = getSelectedElement();
 
-    if (!item) {
+    if (!item && items.length === 0) {
       dom.inspectorEmpty.style.display = 'flex';
       dom.inspectorActive.style.display = 'none';
       dom.selectedBadge.textContent = 'Nenhum objeto';
       if (dom.mobileSelectedDot) dom.mobileSelectedDot.classList.remove('active');
       if (dom.btnMobileInspector) dom.btnMobileInspector.classList.remove('has-selection');
       if (dom.mobileInspectorBtnText) dom.mobileInspectorBtnText.textContent = 'Propriedades';
+      if (dom.btnTopbarMerge) dom.btnTopbarMerge.style.display = 'none';
+      if (dom.rowMergeShapes) dom.rowMergeShapes.style.display = 'none';
       return;
     }
 
@@ -2156,20 +2912,42 @@
     dom.inspectorActive.style.display = 'flex';
     if (dom.mobileSelectedDot) dom.mobileSelectedDot.classList.add('active');
     if (dom.btnMobileInspector) dom.btnMobileInspector.classList.add('has-selection');
-    if (dom.mobileInspectorBtnText) {
-      dom.mobileInspectorBtnText.textContent = item.type === 'text' ? 'Editar Texto' : 'Editar Objeto';
-    }
 
-    // Type Badge
-    let typeName = 'Objeto';
-    if (item.type === 'rect') typeName = 'Quadro / Retângulo';
-    else if (item.type === 'circle') typeName = 'Círculo / Elipse';
-    else if (item.type === 'line') typeName = item.isCurved ? 'Curva Bézier (2pt)' : 'Conector de Linha Reta';
-    else if (item.type === 'connector-round') typeName = 'Conector Redondo de Ângulo Reto';
-    else if (item.type === 'bezier') typeName = item.closed ? `Forma Geométrica Bézier (${item.points ? item.points.length : 0} nós)` : `Caminho Bézier Aberto (${item.points ? item.points.length : 0} nós)`;
-    else if (item.type === 'polygon') typeName = `Polígono (${item.polyPoints} pt)`;
-    else if (item.type === 'text') typeName = 'Texto Vetorial';
-    dom.selectedBadge.textContent = typeName;
+    if (items.length > 1) {
+      dom.selectedBadge.textContent = `${items.length} objetos selecionados`;
+      if (dom.mobileInspectorBtnText) dom.mobileInspectorBtnText.textContent = `${items.length} selecionados`;
+      if (dom.btnTopbarMerge) dom.btnTopbarMerge.style.display = 'inline-flex';
+      if (dom.rowMergeShapes) {
+        dom.rowMergeShapes.style.display = 'block';
+        if (dom.btnMergeShapes) {
+          dom.btnMergeShapes.disabled = false;
+          dom.btnMergeShapes.title = `Mesclar ${items.length} objetos selecionados em um só`;
+        }
+      }
+    } else {
+      if (dom.mobileInspectorBtnText) {
+        dom.mobileInspectorBtnText.textContent = item.type === 'text' ? 'Editar Texto' : 'Editar Objeto';
+      }
+      if (dom.btnTopbarMerge) dom.btnTopbarMerge.style.display = 'none';
+      if (dom.rowMergeShapes) {
+        dom.rowMergeShapes.style.display = 'block';
+        if (dom.btnMergeShapes) {
+          dom.btnMergeShapes.disabled = true;
+          dom.btnMergeShapes.title = 'Segure Shift e clique em outro objeto para selecionar 2 objetos e mesclar';
+        }
+      }
+
+      // Type Badge
+      let typeName = 'Objeto';
+      if (item.type === 'rect') typeName = 'Quadro / Retângulo';
+      else if (item.type === 'circle') typeName = 'Círculo / Elipse';
+      else if (item.type === 'line') typeName = item.isCurved ? 'Curva Bézier (2pt)' : 'Conector de Linha Reta';
+      else if (item.type === 'connector-round') typeName = 'Conector Redondo de Ângulo Reto';
+      else if (item.type === 'bezier') typeName = item.closed ? `Forma Geométrica Bézier (${item.points ? item.points.length : 0} nós)` : `Caminho Bézier Aberto (${item.points ? item.points.length : 0} nós)`;
+      else if (item.type === 'polygon') typeName = `Polígono (${item.polyPoints} pt)`;
+      else if (item.type === 'text') typeName = 'Texto Vetorial';
+      dom.selectedBadge.textContent = typeName;
+    }
 
     // Text Properties
     if (item.type === 'text' && dom.rowTextProps) {
@@ -2553,52 +3331,65 @@
   }
 
   function duplicateSelected() {
-    const item = getSelectedElement();
-    if (!item) return;
+    const items = getSelectedElements();
+    if (items.length === 0) return;
 
-    const clone = JSON.parse(JSON.stringify(item));
-    clone.id = `shape_${state.nextId++}`;
-    clone.x += 20;
-    clone.y += 20;
+    const newIds = [];
+    items.forEach(item => {
+      const clone = JSON.parse(JSON.stringify(item));
+      clone.id = `shape_${state.nextId++}`;
+      clone.x += 20;
+      clone.y += 20;
 
-    if (clone.type === 'line' || clone.type === 'connector-round') {
-      clone.x1 += 20; clone.y1 += 20;
-      clone.x2 += 20; clone.y2 += 20;
-      if (clone.cx !== undefined) clone.cx += 20;
-      if (clone.cy !== undefined) clone.cy += 20;
-    } else if (clone.type === 'bezier') {
-      clone.points.forEach(p => {
-        p.x += 20; p.y += 20;
-        if (p.cp1) { p.cp1.x += 20; p.cp1.y += 20; }
-        if (p.cp2) { p.cp2.x += 20; p.cp2.y += 20; }
-      });
-    }
+      if (clone.type === 'line' || clone.type === 'connector-round') {
+        clone.x1 += 20; clone.y1 += 20;
+        clone.x2 += 20; clone.y2 += 20;
+        if (clone.cx !== undefined) clone.cx += 20;
+        if (clone.cy !== undefined) clone.cy += 20;
+      } else if (clone.type === 'bezier') {
+        if (clone.points) {
+          clone.points.forEach(p => {
+            p.x += 20; p.y += 20;
+            if (p.cp1) { p.cp1.x += 20; p.cp1.y += 20; }
+            if (p.cp2) { p.cp2.x += 20; p.cp2.y += 20; }
+          });
+        }
+      }
 
-    if (clone.gradient) clone.gradient.id = `grad_${clone.id}`;
+      if (clone.gradient) clone.gradient.id = `grad_${clone.id}`;
 
-    state.elements.set(clone.id, clone);
-    renderSvgElement(clone);
-    selectElement(clone.id);
+      state.elements.set(clone.id, clone);
+      renderSvgElement(clone);
+      newIds.push(clone.id);
+    });
+
+    state.selectedIds = newIds;
+    state.selectedId = newIds[newIds.length - 1];
+    renderSelectionOverlay();
+    updateInspector();
     saveHistoryState();
-    showToast('Objeto duplicado!');
+    showToast(newIds.length > 1 ? `${newIds.length} objetos duplicados!` : 'Objeto duplicado!');
   }
 
   function deleteSelected() {
-    const item = getSelectedElement();
-    if (!item) return;
+    const items = getSelectedElements();
+    if (items.length === 0) return;
 
-    const el = document.getElementById(item.id);
-    if (el) el.remove();
+    items.forEach(item => {
+      const el = document.getElementById(item.id);
+      if (el) el.remove();
 
-    if (item.gradient) {
-      const gDef = document.getElementById(item.gradient.id);
-      if (gDef) gDef.remove();
-    }
+      if (item.gradient) {
+        const gDef = document.getElementById(item.gradient.id);
+        if (gDef) gDef.remove();
+      }
 
-    state.elements.delete(item.id);
+      state.elements.delete(item.id);
+    });
+
     clearSelection();
     saveHistoryState();
-    showToast('Objeto excluído');
+    showToast(items.length > 1 ? `${items.length} objetos excluídos` : 'Objeto excluído');
   }
 
   // =========================================================================
@@ -3588,6 +4379,8 @@
     });
 
     // Special Actions
+    if (dom.btnMergeShapes) dom.btnMergeShapes.addEventListener('click', mergeSelectedElements);
+    if (dom.btnTopbarMerge) dom.btnTopbarMerge.addEventListener('click', mergeSelectedElements);
     dom.btnConvertShape.addEventListener('click', convertSelectedShape);
     dom.btnToggleCurve.addEventListener('click', toggleLineCurvature);
 
@@ -4256,6 +5049,10 @@
         return;
       }
 
+      if (e.key === 'Shift') {
+        state.shiftPressed = true;
+      }
+
       if (e.code === 'Space' && !state.spacePressed) {
         state.spacePressed = true;
         dom.viewport.classList.add('panning');
@@ -4306,10 +5103,22 @@
         duplicateSelected();
       }
 
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'a' || e.key === 'A')) {
+        e.preventDefault();
+        selectAllElements();
+      }
+
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'm' || e.key === 'M')) {
+        e.preventDefault();
+        mergeSelectedElements();
+      }
+
       const item = getSelectedElement();
       if (item && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
         e.preventDefault();
         const step = e.shiftKey ? 10 : 1;
+        const arrowItems = getSelectedElements();
+        arrowItems.forEach(item => {
         if (e.key === 'ArrowUp') { 
           item.y -= step; 
           if (item.y1 !== undefined) item.y1 -= step; 
@@ -4339,6 +5148,7 @@
           if (item.points) item.points.forEach(p => { p.x += step; if (p.cp1) p.cp1.x += step; if (p.cp2) p.cp2.x += step; });
         }
         renderSvgElement(item);
+      });
         renderSelectionOverlay();
         updateInspector();
         saveHistoryState();
@@ -4346,12 +5156,20 @@
     });
 
     window.addEventListener('keyup', (e) => {
+      if (e.key === 'Shift') {
+        state.shiftPressed = false;
+      }
       if (e.code === 'Space') {
         state.spacePressed = false;
         if (state.tool !== 'pan') {
           dom.viewport.classList.remove('panning');
         }
       }
+    });
+
+    window.addEventListener('blur', () => {
+      state.shiftPressed = false;
+      state.spacePressed = false;
     });
   }
 

@@ -41,6 +41,15 @@
           </button>
         </div>
 
+        <!-- Quick Merge Button (Visible when multiple items selected) -->
+        <button type="button" id="btn-topbar-merge" class="btn-merge-topbar" style="display:none;" title="Mesclar objetos selecionados em um só (Ctrl+M)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="8" cy="12" r="5" stroke-dasharray="2 2"/>
+            <circle cx="15" cy="12" r="5"/>
+          </svg>
+          <span>Mesclar</span>
+        </button>
+
         <div class="divider-vertical"></div>
 
         <!-- Zoom Controls -->
@@ -471,6 +480,18 @@
             <!-- SPECIAL ACTIONS: Converter Quadro em Círculo & Remover Pontas -->
             <section class="prop-section special-actions-section">
               <div class="section-title">Ações Especiais de Forma</div>
+
+              <!-- Mesclar / Unir Objetos Selecionados -->
+              <div class="form-row action-row" id="row-merge-shapes">
+                <button type="button" id="btn-merge-shapes" class="btn-action-highlight btn-merge-action" title="Mesclar dois ou mais objetos selecionados em um só (Shift + Clique para selecionar)">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="9" cy="12" r="5" stroke-dasharray="2 2"/>
+                    <circle cx="15" cy="12" r="5"/>
+                    <path d="M12 7a5 5 0 0 1 0 10"/>
+                  </svg>
+                  <span id="btn-merge-text">Mesclar Objetos (Tornar um só)</span>
+                </button>
+              </div>
 
               <!-- Converter Quadro em Círculo / Círculo em Quadro -->
               <div class="form-row action-row" id="row-convert-shape">
